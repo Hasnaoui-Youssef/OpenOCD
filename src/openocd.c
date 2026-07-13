@@ -27,6 +27,7 @@
 #include <target/arm_cti.h>
 #include <target/arm_adi_v5.h>
 #include <target/arm_tpiu_swo.h>
+#include <target/arm_tmc.h>
 #include <rtt/rtt.h>
 
 #include <server/server.h>
@@ -169,6 +170,9 @@ COMMAND_HANDLER(handle_init_command)
 	if (command_run_line(CMD_CTX, "tpiu init") != ERROR_OK)
 		return ERROR_FAIL;
 
+	if (command_run_line(CMD_CTX, "tmc init") != ERROR_OK)
+		return ERROR_FAIL;
+
 	jtag_poll_unmask(save_poll_mask);
 
 	/* initialize telnet subsystem */
@@ -258,6 +262,7 @@ static struct command_context *setup_command_handler(Jim_Interp *interp)
 		&cti_register_commands,
 		&dap_register_commands,
 		&arm_tpiu_swo_register_commands,
+        &arm_tmc_register_commands,
 		NULL
 	};
 	for (unsigned i = 0; command_registrants[i]; i++) {
@@ -356,6 +361,7 @@ int openocd_main(int argc, char *argv[])
 	flash_free_all_banks();
 	gdb_service_free();
 	arm_tpiu_swo_cleanup_all();
+    tmc_cleanup_all();
 	server_free();
 
 	unregister_all_commands(cmd_ctx, NULL);

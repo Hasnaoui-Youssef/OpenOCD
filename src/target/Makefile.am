@@ -111,7 +111,9 @@ ARM_DEBUG_SRC = \
 	%D%/etm.c \
 	%D%/etm_dummy.c \
 	%D%/arm_tpiu_swo.c \
-	%D%/arm_cti.c
+	%D%/arm_cti.c \
+	%D%/arm_tmc.c
+
 
 AVR32_SRC = \
 	%D%/avr32_ap7k.c \

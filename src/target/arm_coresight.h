@@ -97,4 +97,11 @@ static inline bool is_valid_arm_cs_cidr(uint32_t cidr)
 #define ARM_CS_ROMENTRY_PRESENT                 BIT(0)
 #define ARM_CS_ROMENTRY_OFFSET_MASK             (0xFFFFF000U)
 
+/* Management Registers for CS components */
+#define ARM_CS_LAR         (0xFB0)
+#define ARM_CS_LSR         (0xFB4)
+#define ARM_CS_LAR_UNLOCK               0xC5ACCE55u
+#define ARM_CS_LSR_SLI                  BIT(1)
+
+
 #endif /* OPENOCD_TARGET_ARM_CORESIGHT_H */
