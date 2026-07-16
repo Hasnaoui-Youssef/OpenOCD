@@ -85,15 +85,17 @@
 #define TMC_FFCR_SW_FIFO_CONFIG (TMC_FFCR_STOPOTRIGIN | TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
 
 /* =========================================================================
- * DEVTYPE[3:0] = 0x1: Trace Sink
- * DEVTYPE[7:4] = 0x2: Buffer (ETB/ETF)
- * DEVTYPE[7:4] = 0x3: Router (ETR)
+ * DEVTYPE[3:0] = 0x1: Trace Sink (ETB/ETR)
+ * DEVTYPE[3:0] = 0x2: Trace Sink (ETF)
+ * DEVTYPE[7:4] = 0x2: Buffer (ETB/ETR)
+ * DEVTYPE[7:4] = 0x3: Router (ETF)
  *
  * DEVID[7:6] CONFIGTYPE:  0=ETB  1=ETR  2=ETF
  * ========================================================================= */
 #define TMC_DEVTYPE_MAJOR_MASK      0x0Fu
 #define TMC_DEVTYPE_SUB_MASK        0xF0u
 #define TMC_DEVTYPE_MAJOR_SINK      0x01u
+#define TMC_DEVTYPE_MAJOR_LINK      0x02u
 #define TMC_DEVTYPE_SUB_BUFFER      0x20u
 #define TMC_DEVTYPE_SUB_ROUTER      0x30u
 #define TMC_DEVID_CFGTYPE_SHIFT     6u

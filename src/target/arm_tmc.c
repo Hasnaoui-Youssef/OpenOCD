@@ -180,44 +180,53 @@ static int tmc_validate_identity(struct tmc_object *obj) {
   uint32_t devtype, devid;
   int retval;
 
-  retval = tmc_read32(obj, ARM_CS_C9_DEVTYPE, &devtype);
+  retval = tmc_queue_read32(obj, ARM_CS_C9_DEVID, &devid);
+  if (retval != ERROR_OK) {
+    LOG_ERROR("TMC %s: failed to read DEVID", obj->name);
+    return retval;
+  }
+  retval = tmc_queue_read32(obj, ARM_CS_C9_DEVTYPE, &devtype);
   if (retval != ERROR_OK) {
     LOG_ERROR("TMC %s: failed to read DEVTYPE", obj->name);
+    return retval;
+  }
+  retval = tmc_dap_run(obj);
+  if (retval != ERROR_OK) {
+    LOG_ERROR("TMC %s: failed to read DEVTYPE and DEVID", obj->name);
     return retval;
   }
 
   uint8_t major = (uint8_t)(devtype & TMC_DEVTYPE_MAJOR_MASK);
   uint8_t sub = (uint8_t)(devtype & TMC_DEVTYPE_SUB_MASK);
-
-  if (major != TMC_DEVTYPE_MAJOR_SINK ||
-      (sub != TMC_DEVTYPE_SUB_BUFFER && sub != TMC_DEVTYPE_SUB_ROUTER)) {
-    LOG_ERROR("TMC %s: DEVTYPE 0x%08" PRIx32
-              " is not a TMC (expected major=0x1, sub=0x2 or 0x3)",
-              obj->name, devtype);
-    return ERROR_FAIL;
-  }
-
-  retval = tmc_read32(obj, ARM_CS_C9_DEVTYPE, &devid);
-  if (retval != ERROR_OK) {
-    LOG_ERROR("TMC %s: failed to read DEVID", obj->name);
-    return retval;
-  }
-
   uint32_t ct = (devid & TMC_DEVID_CFGTYPE_MASK) >> TMC_DEVID_CFGTYPE_SHIFT;
+
+  LOG_DEBUG("TMC %s: DEVID : 0x%08" PRIx32, obj->name, devid);
+
   switch (ct) {
   case TMC_CFGTYPE_ETB:
-    obj->config_type = TMC_CONFIG_ETB;
-    break;
   case TMC_CFGTYPE_ETR:
-    obj->config_type = TMC_CONFIG_ETR;
+    obj->config_type = ct;
+    if(major != TMC_DEVTYPE_MAJOR_SINK || sub != TMC_DEVTYPE_SUB_BUFFER) {
+      LOG_ERROR("TMC %s: DEVTYPE 0x%08" PRIx32
+                " is not an ETR|ETB expected major=0x1, sub=0x2",
+                obj->name, devtype);
+      return ERROR_FAIL;
+    }
     break;
   case TMC_CFGTYPE_ETF:
-    obj->config_type = TMC_CONFIG_ETF;
+    obj->config_type = ct;
+    if(major != TMC_DEVTYPE_MAJOR_LINK || sub != TMC_DEVTYPE_SUB_ROUTER) {
+      LOG_ERROR("TMC %s: DEVTYPE 0x%08" PRIx32
+                " is not an ETF expected major=0x2, sub=0x3",
+                obj->name, devtype);
+      return ERROR_FAIL;
+    }
     break;
   default:
     LOG_WARNING("TMC %s: unknown CONFIGTYPE %u", obj->name, ct);
     return ERROR_FAIL;
   }
+
   return ERROR_OK;
 }
 
@@ -255,7 +264,6 @@ static struct tmc_trace_data_chunk* tmc_create_chunk(struct tmc_object *obj, uin
 
 static int tmc_instance_init(struct tmc_object *obj) {
   int retval;
-
   retval = tmc_unlock(obj);
   if (retval != ERROR_OK) {
     LOG_ERROR("TMC %s: failed to unlock component", obj->name);
@@ -263,6 +271,12 @@ static int tmc_instance_init(struct tmc_object *obj) {
     obj->ap = NULL;
     return retval;
   }
+  retval = tmc_validate_identity(obj);
+  if(retval != ERROR_OK) {
+      LOG_ERROR("TMC %s: failed to validate component is TMC", obj->name);
+      return retval;
+  }
+
   retval = tmc_validate_config(obj);
   if(retval != ERROR_OK){
     LOG_ERROR("TMC %s: Configuration is not valid, verify parameters,"
@@ -405,7 +419,6 @@ static int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi)
   Jim_Interp *interp = goi->interp;
   bool config_spot = false;
   int e;
-
   while (goi->argc > 0) {
     Jim_SetEmptyResult(interp);
 
@@ -668,6 +681,7 @@ static int jim_tmc_configure(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
     Jim_WrongNumArgs(interp, 1, argv, "?name? ..options...");
     return JIM_ERR;
   }
+  goi.isconfigure = 1;
   r = tmc_stage_config(obj, &goi);
   if(r != JIM_OK)
       return JIM_ERR;
@@ -717,6 +731,7 @@ static const struct command_registration tmc_instance_command_handlers[] = {
         .usage = "Configures TMC parameters",
         .jim_handler = jim_tmc_configure,
     },
+    COMMAND_REGISTRATION_DONE,
 };
 
 static int tmc_create(struct jim_getopt_info *goi) {
@@ -754,6 +769,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
   adiv5_mem_ap_spot_init(&obj->spot);
   obj->initialised = false;
 
+  goi->isconfigure = 1;
   if(tmc_stage_config(obj, goi) != JIM_OK) {
     Jim_SetResultString(goi->interp,
                         "Unable to configure TMC", -1);
@@ -770,18 +786,9 @@ static int tmc_create(struct jim_getopt_info *goi) {
     return JIM_ERR;
   }
 
-  if(!tmc_validate_identity(obj)){
-    Jim_SetResultString(goi->interp,
-                        "Unable to read TMC capabilities", -1);
-    dap_put_ap(obj->ap);
-    free(obj->name);
-    free(obj);
-    return JIM_ERR;
-  }
-
   const struct command_registration tmc_instance_commands[] = {
       {
-          .name = name,
+          .name = obj->name,
           .mode = COMMAND_ANY,
           .help = "TMC instance command group",
           .usage = "",
@@ -790,6 +797,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
       COMMAND_REGISTRATION_DONE,
   };
   struct command_context *cmd_ctx = current_command_context(interp);
+  assert(cmd_ctx);
   LOG_DEBUG("TMC %s: object created", name);
 
   if (register_commands_with_data(cmd_ctx, NULL, tmc_instance_commands, obj) != ERROR_OK) {
