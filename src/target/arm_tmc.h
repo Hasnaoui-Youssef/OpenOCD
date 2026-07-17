@@ -70,19 +70,20 @@
  * ========================================================================= */
 #define TMC_FFCR_ENFT           BIT(0)
 #define TMC_FFCR_ENTI           BIT(1)
-#define TMC_FFCR_FONLYIN        BIT(2)
-#define TMC_FFCR_FONTRIGEVT     BIT(3)
-#define TMC_FFCR_FLUSHMAN       BIT(4)  /* Self-clearing */
-#define TMC_FFCR_TRIGONFLIN     BIT(5)
-#define TMC_FFCR_TRIGONTRIGIN   BIT(6)
-#define TMC_FFCR_STOPONFL       BIT(7)
-#define TMC_FFCR_STOPOTRIGIN    BIT(8)
-#define TMC_FFCR_DRAINBUFFER    BIT(9)
+#define TMC_FFCR_FONLYIN        BIT(4)
+#define TMC_FFCR_FONTRIGEVT     BIT(5)
+#define TMC_FFCR_FLUSHMAN       BIT(6)  /* Self-clearing */
+#define TMC_FFCR_TRIGONTRIGIN   BIT(8)
+#define TMC_FFCR_TRIGONTRIGEVT  BIT(9)
+#define TMC_FFCR_TRIGONFLIN     BIT(10)
+#define TMC_FFCR_STOPONFL       BIT(12)
+#define TMC_FFCR_STOPOTRIGEVT   BIT(13)
+#define TMC_FFCR_DRAINBUFFER    BIT(14)
 
 #define TMC_FFCR_CIRC_CONFIG (TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_FONTRIGEVT | TMC_FFCR_STOPONFL | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
 //This 2 are the same value but are set as different defines just in case it changes
-#define TMC_FFCR_HW_FIFO_CONFIG (TMC_FFCR_STOPOTRIGIN | TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
-#define TMC_FFCR_SW_FIFO_CONFIG (TMC_FFCR_STOPOTRIGIN | TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
+#define TMC_FFCR_HW_FIFO_CONFIG (TMC_FFCR_STOPOTRIGEVT | TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
+#define TMC_FFCR_SW_FIFO_CONFIG (TMC_FFCR_STOPOTRIGEVT | TMC_FFCR_TRIGONTRIGIN | TMC_FFCR_ENFT | TMC_FFCR_ENTI)
 
 /* =========================================================================
  * DEVTYPE[3:0] = 0x1: Trace Sink (ETB/ETR)

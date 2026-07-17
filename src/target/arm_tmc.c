@@ -158,6 +158,8 @@ static int tmc_target_callback_event_handler(struct target *target,
         if(r != ERROR_OK)
             return r;
         //Fallthrough cause we're not failing on other events
+    case TARGET_EVENT_HALTED:
+        //We will be handling data extraction here
     default:
         return ERROR_OK;
     }
@@ -330,6 +332,7 @@ static int tmc_extract_data(struct tmc_object* obj)
         tmc_read_trace_buff(obj, chunk->buff, buff_level_words);
         list_add_tail(&chunk->lh, &obj->history.chunks);
         //Read RRD until we get 0xFFFFFFFF, or since we know the size of  the buffer, we read the whole thing in one go
+        obj->state = TMC_DISABLED;
         return tmc_write32(obj, TMC_CTL, 0);
     }
     case TMC_MODE_SW_FIFO: {
@@ -602,8 +605,10 @@ COMMAND_HANDLER(tmc_enable_handler) {
   if (r != ERROR_OK)
     return r;
   r = tmc_commit_config(obj, false);
-  if (r != ERROR_OK)
+  if (r != ERROR_OK){
+    LOG_ERROR("TMC %s: Failed to commit config", obj->name);
     return r;
+  }
 
   r = tmc_queue_write32(obj, TMC_FFCR, ffcr_config_val);
   if (r != ERROR_OK)
@@ -631,6 +636,10 @@ COMMAND_HANDLER(tmc_disable_handler)
     if (r != ERROR_OK)
         return r;
     if(sts_val & TMC_STS_TMCREADY){
+        if(sts_val & TMC_STS_EMPTY) {
+            obj->state = TMC_DISABLED;
+            return tmc_write32(obj, TMC_CTL, 0);
+        }
         obj->state = TMC_STOPPED;
         return tmc_extract_data(obj);
     }
