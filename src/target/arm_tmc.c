@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #include "helper/time_support.h"
+#include "helper/fileio.h"
 #include "helper/list.h"
 #include "helper/log.h"
 
@@ -67,17 +68,17 @@ static int tmc_dap_run(struct tmc_object *obj) {
 
 static int tmc_commit_config(struct tmc_object *obj, bool override) {
     int r;
-    if(obj->pending_config.mode_set && !override) {
+    if (override || obj->pending_config.mode_set) {
         r = tmc_queue_write32(obj, TMC_MODE, obj->mode);
         if (r != ERROR_OK) return r;
         obj->pending_config.mode_set = false;
     }
-    if(obj->pending_config.bufwm_set && !override) {
+    if (override || obj->pending_config.bufwm_set) {
         r = tmc_queue_write32(obj, TMC_BUFWM, obj->bufwm);
         if (r != ERROR_OK) return r;
         obj->pending_config.bufwm_set = false;
     }
-    if(obj->pending_config.etr_addr_set && !override) {
+    if (override || obj->pending_config.etr_addr_set) {
         r = tmc_queue_write32(obj, TMC_DBALO, (obj->etr_config.addr & ~((uint32_t) 0U)));
         if (r != ERROR_OK) return r;
         if((obj->etr_config.addr >> 32) > 0) {
@@ -85,15 +86,16 @@ static int tmc_commit_config(struct tmc_object *obj, bool override) {
         }
         obj->pending_config.etr_addr_set = false;
     }
-    if(obj->pending_config.etr_size_set && !override) {
+    if (override || obj->pending_config.etr_size_set) {
         r = tmc_queue_write32(obj, TMC_RSZ, obj->etr_config.size);
         if (r != ERROR_OK) return r;
         obj->pending_config.etr_size_set = false;
     }
-    if((obj->pending_config.axi_other_set ||
+    if(override || (
+            obj->pending_config.axi_other_set ||
             obj->pending_config.axi_cache_set ||
-            obj->pending_config.axi_cache_alloc_set)
-            && !override) {
+            obj->pending_config.axi_cache_alloc_set
+            )) {
         r = tmc_queue_write32(obj, TMC_AXICTL, *(uint32_t*)&obj->etr_config.axi_config);
         if (r != ERROR_OK) return r;
         obj->pending_config.axi_other_set = false;
@@ -140,6 +142,186 @@ static int tmc_poll_bit(struct tmc_object *obj, uint32_t offset, uint32_t mask,
 /***************************************
  * Misc functions
  **************************************/
+static struct tmc_trace_data_chunk* tmc_create_chunk(struct tmc_object *obj, uint32_t count)
+{
+  struct tmc_trace_data_chunk *chunk = calloc(1, sizeof(struct tmc_trace_data_chunk));
+  if(!chunk)
+      return NULL;
+  INIT_LIST_HEAD(&chunk->lh);
+  chunk->byte_count = count * sizeof(uint32_t);
+  chunk->buff = malloc(chunk->byte_count);
+  if(!chunk->buff){
+      free(chunk);
+      return NULL;
+  }
+  return chunk;
+}
+
+/**
+ * This method assumes that the TMC is already stopped at this point.
+ * This doesn't matter much for circular buffer mode since
+ * we'll be polling the TMCREADY bit, however this can really degrade
+ * performance and limit communication with the device if the TMC is still running
+ * as we are using an atomic operation over and over again to check for the status
+*/
+static int tmc_extract_data(struct tmc_object* obj)
+{
+    int r;
+    switch(obj->mode) {
+    case TMC_MODE_CIRC: {
+        r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
+        if (r != ERROR_OK)
+            return r;
+
+        if (obj->config_type == TMC_CONFIG_ETR && obj->etr_config.axi_config.scatter_mode) {
+            LOG_ERROR("TMC %s: trace extraction is not supported in scatter-gather mode",
+                    obj->name);
+            return ERROR_NOT_IMPLEMENTED;
+        }
+
+        /*
+         * CBUFLEVEL is only valid while TraceCaptEn is set, which still holds
+         * here: CTL is not cleared until the buffer has been drained below.
+         * By this point the stop sequence has padded the trace out to a whole
+         * number of formatter frames, so the fill level covers every byte that
+         * needs reading. LBUFLEVEL is unsuitable, it latches a maximum since
+         * its own last read rather than the amount of readable data.
+         */
+        uint32_t sts_val, buff_level_words;
+        r = tmc_queue_read32(obj, TMC_STS, &sts_val);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_queue_read32(obj, TMC_CBUFLEVEL, &buff_level_words);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_dap_run(obj);
+        if (r != ERROR_OK)
+            return r;
+
+        /* Once the buffer has wrapped it stays full, so the whole RAM is live. */
+        if (sts_val & TMC_STS_FULL)
+            buff_level_words = (obj->config_type == TMC_CONFIG_ETR) ? obj->etr_config.size
+                                                                    : obj->ram_size_words;
+
+        if (buff_level_words == 0) {
+            LOG_DEBUG("TMC %s: trace buffer empty, nothing to capture", obj->name);
+            obj->state = TMC_DISABLED;
+            return tmc_write32(obj, TMC_CTL, 0);
+        }
+
+        struct tmc_trace_data_chunk *chunk = tmc_create_chunk(obj, buff_level_words);
+        if(!chunk) {
+            return ERROR_FAIL;
+        }
+        r = tmc_read_trace_buff(obj, chunk->buff, buff_level_words);
+        if (r != ERROR_OK) {
+            LOG_ERROR("TMC %s: failed to read %" PRIu32 " words of trace data",
+                    obj->name, buff_level_words);
+            free(chunk->buff);
+            free(chunk);
+            return r;
+        }
+        list_add_tail(&chunk->lh, &obj->history.chunks);
+        LOG_DEBUG("TMC %s: captured %" PRIu32 " bytes of trace data%s", obj->name,
+                chunk->byte_count, (sts_val & TMC_STS_FULL) ? " (buffer wrapped)" : "");
+
+        obj->state = TMC_DISABLED;
+        return tmc_write32(obj, TMC_CTL, 0);
+    }
+    case TMC_MODE_SW_FIFO: {
+        /*
+         * Currently we cannot support this without a multi-threaded modal
+         * This assumes that we are continuously reading data from the TMC
+         * when the core is running and this just disables the TMC by
+         * triggering a manual flush
+        */
+        uint32_t ffcr_val;
+        r = tmc_read32(obj, TMC_FFCR, &ffcr_val);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_queue_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_queue_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL | TMC_FFCR_FLUSHMAN);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_dap_run(obj);
+        if (r != ERROR_OK)
+            return r;
+        return ERROR_FAIL;
+    }
+    case TMC_MODE_HW_FIFO:
+        //Should we even support this given the state of the probes?
+        return ERROR_OK;
+    default:
+        return ERROR_FAIL;
+    }
+}
+
+static int tmc_start_capture(struct tmc_object *obj) {
+  int r;
+  uint32_t ffcr_config_val;
+  switch(obj->mode) {
+  case TMC_MODE_CIRC:
+    ffcr_config_val = TMC_FFCR_CIRC_CONFIG;
+    break;
+  case TMC_MODE_SW_FIFO:
+    ffcr_config_val = TMC_FFCR_SW_FIFO_CONFIG;
+    break;
+  case TMC_MODE_HW_FIFO:
+    ffcr_config_val = TMC_FFCR_HW_FIFO_CONFIG;
+    break;
+  default:
+    return ERROR_FAIL;
+  }
+  r = tmc_queue_write32(obj, TMC_FFCR, ffcr_config_val);
+  if (r != ERROR_OK)
+    return r;
+  r = tmc_queue_write32(obj, TMC_CTL, TMC_CTL_TRACECAPTEN);
+  if (r != ERROR_OK)
+    return r;
+  r = tmc_dap_run(obj);
+  if (r != ERROR_OK)
+    return r;
+  obj->state = TMC_RUNNING;
+  return ERROR_OK;
+}
+
+/*
+ * Called from TARGET_EVENT_HALTED. The TMC may already have reached
+ * Stopped on its own (e.g. a HW trigger-driven stop fired before the
+ * core halted), so poll TMCReady first. Only if that times out do we
+ * force a stop via manual flush, then poll again before extracting.
+ */
+static int tmc_stop_and_extract(struct tmc_object *obj)
+{
+    int r;
+    uint32_t ffcr_val, sts_val;
+
+    r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
+    if (r != ERROR_OK) {
+        r = tmc_read32(obj, TMC_FFCR, &ffcr_val);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL);
+        r |= tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL | TMC_FFCR_FLUSHMAN);
+        if (r != ERROR_OK)
+            return r;
+        r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
+        if (r != ERROR_OK)
+            return r;
+    }
+
+    r = tmc_read32(obj, TMC_STS, &sts_val);
+    if (r != ERROR_OK)
+        return r;
+    if (sts_val & TMC_STS_EMPTY) {
+        obj->state = TMC_DISABLED;
+        return tmc_write32(obj, TMC_CTL, 0);
+    }
+    obj->state = TMC_STOPPED;
+    return tmc_extract_data(obj);
+}
 
 static int tmc_target_callback_event_handler(struct target *target,
         enum target_event event,
@@ -149,17 +331,22 @@ static int tmc_target_callback_event_handler(struct target *target,
     struct tmc_object* obj = (struct tmc_object*) priv;
     switch(event) {
     case TARGET_EVENT_RESET_END:
+        obj->state = TMC_DISABLED;
         return tmc_commit_config(obj, true);
     case TARGET_EVENT_RESUME_START:
+        if (!obj->capture_requested || obj->state != TMC_DISABLED)
+            return ERROR_OK;
         r = tmc_validate_config(obj);
         if(r != ERROR_OK)
             return r;
         r =  tmc_commit_config(obj, false);
         if(r != ERROR_OK)
             return r;
-        //Fallthrough cause we're not failing on other events
+        return tmc_start_capture(obj);
     case TARGET_EVENT_HALTED:
-        //We will be handling data extraction here
+        if (obj->state != TMC_RUNNING)
+            return ERROR_OK;
+        return tmc_stop_and_extract(obj);
     default:
         return ERROR_OK;
     }
@@ -249,20 +436,6 @@ static int tmc_buff_free(struct tmc_object* obj)
     return ERROR_OK;
 }
 
-static struct tmc_trace_data_chunk* tmc_create_chunk(struct tmc_object *obj, uint32_t count)
-{
-  struct tmc_trace_data_chunk *chunk = calloc(1, sizeof(struct tmc_trace_data_chunk));
-  if(!chunk)
-      return NULL;
-  INIT_LIST_HEAD(&chunk->lh);
-  chunk->byte_count = count * sizeof(uint32_t);
-  chunk->buff = malloc(chunk->byte_count);
-  if(!chunk->buff){
-      free(chunk);
-      return NULL;
-  }
-  return chunk;
-}
 
 static int tmc_instance_init(struct tmc_object *obj) {
   int retval;
@@ -298,6 +471,10 @@ static int tmc_instance_init(struct tmc_object *obj) {
            : obj->config_type == TMC_CONFIG_ETR ? "ETR"
                                                 : "ETF",
            (uint64_t)obj->spot.base, (unsigned int)obj->spot.ap_num);
+  if (obj->state != TMC_DISABLED) {
+    LOG_ERROR("TMC %s: cannot commit initial configuration, device not disabled", obj->name);
+    return ERROR_FAIL;
+  }
   retval = tmc_commit_config(obj, true);
   if(retval != ERROR_OK) {
       LOG_ERROR("TMC %s: Unable to write configuration to device", obj->name);
@@ -307,63 +484,6 @@ static int tmc_instance_init(struct tmc_object *obj) {
   return ERROR_OK;
 }
 
-/**
- * This method assumes that the TMC is already stopped at this point.
- * Handling stop conditions should be done separately
- * This doesn't matter much for circular buffer mode since
- * we'll be polling the TMCREADY bit, however this can really degrade
- * performance and limit communication with the device if the TMC is still running
- * as we are using an atomic operation over and over again to check for the status
-*/
-static int tmc_extract_data(struct tmc_object* obj)
-{
-    int r;
-    switch(obj->mode) {
-    case TMC_MODE_CIRC: {
-        r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
-        if (r != ERROR_OK)
-            return r;
-        uint32_t buff_level_words;
-        tmc_read32(obj, TMC_LBUFLEVEL, &buff_level_words);
-        struct tmc_trace_data_chunk *chunk = tmc_create_chunk(obj, buff_level_words);
-        if(!chunk) {
-            return ERROR_FAIL;
-        }
-        tmc_read_trace_buff(obj, chunk->buff, buff_level_words);
-        list_add_tail(&chunk->lh, &obj->history.chunks);
-        //Read RRD until we get 0xFFFFFFFF, or since we know the size of  the buffer, we read the whole thing in one go
-        obj->state = TMC_DISABLED;
-        return tmc_write32(obj, TMC_CTL, 0);
-    }
-    case TMC_MODE_SW_FIFO: {
-        /*
-         * Currently we cannot support this without a multi-threaded modal
-         * This assumes that we are continuously reading data from the TMC
-         * when the core is running and this just disables the TMC by
-         * triggering a manual flush
-        */
-        uint32_t ffcr_val;
-        r = tmc_read32(obj, TMC_FFCR, &ffcr_val);
-        if (r != ERROR_OK)
-            return r;
-        r = tmc_queue_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL);
-        if (r != ERROR_OK)
-            return r;
-        r = tmc_queue_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL | TMC_FFCR_FLUSHMAN);
-        if (r != ERROR_OK)
-            return r;
-        r = tmc_dap_run(obj);
-        if (r != ERROR_OK)
-            return r;
-        return ERROR_FAIL;
-    }
-    case TMC_MODE_HW_FIFO:
-        //Should we even support this given the state of the probes?
-        return ERROR_OK;
-    default:
-        return ERROR_FAIL;
-    }
-}
 /****************************************
  * Instance cmd handlers
  ****************************************/
@@ -583,99 +703,116 @@ static int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi)
 }
 
 COMMAND_HANDLER(tmc_enable_handler) {
-  int r;
   struct tmc_object *obj = CMD_DATA;
-  if (!obj->initialised || !(obj->state == TMC_DISABLED))
+  if (!obj->initialised)
     return ERROR_FAIL;
-  uint32_t ffcr_config_val;
-  switch(obj->mode) {
-  case TMC_MODE_CIRC:
-    ffcr_config_val = TMC_FFCR_CIRC_CONFIG;
-    break;
-  case TMC_MODE_SW_FIFO:
-    ffcr_config_val = TMC_FFCR_SW_FIFO_CONFIG;
-    break;
-  case TMC_MODE_HW_FIFO:
-    ffcr_config_val = TMC_FFCR_HW_FIFO_CONFIG;
-    break;
-  default:
-    return ERROR_FAIL;
-  }
-  r = tmc_validate_config(obj);
-  if (r != ERROR_OK)
-    return r;
-  r = tmc_commit_config(obj, false);
-  if (r != ERROR_OK){
-    LOG_ERROR("TMC %s: Failed to commit config", obj->name);
-    return r;
-  }
-
-  r = tmc_queue_write32(obj, TMC_FFCR, ffcr_config_val);
-  if (r != ERROR_OK)
-    return r;
-   r = tmc_queue_write32(obj, TMC_CTL, TMC_CTL_TRACECAPTEN);
-  if (r != ERROR_OK)
-    return r;
-  r = tmc_dap_run(obj);
-  if (r != ERROR_OK)
-    return r;
-  obj->state = TMC_RUNNING;
+  obj->capture_requested = true;
   return ERROR_OK;
 }
 
+/*
+ * TARGET_EVENT_HALTED already drains every Running session down to
+ * Disabled on its own, so state == TMC_STOPPED here is the recovery
+ * path for when that automatic drain didn't finish (e.g. a poll in
+ * tmc_stop_and_extract timed out). This never force-stops a currently
+ * Running capture itself.
+ */
 COMMAND_HANDLER(tmc_disable_handler)
 {
-    int r;
-    uint32_t ffcr_val, sts_val;
     struct tmc_object* obj = CMD_DATA;
-    r = tmc_queue_read32(obj, TMC_STS, &sts_val);
-    r |= tmc_queue_read32(obj, TMC_FFCR, &ffcr_val);
-    if (r != ERROR_OK)
-        return r;
-    r = tmc_dap_run(obj);
-    if (r != ERROR_OK)
-        return r;
-    if(sts_val & TMC_STS_TMCREADY){
-        if(sts_val & TMC_STS_EMPTY) {
-            obj->state = TMC_DISABLED;
-            return tmc_write32(obj, TMC_CTL, 0);
-        }
-        obj->state = TMC_STOPPED;
+    obj->capture_requested = false;
+    if (obj->state == TMC_STOPPED)
         return tmc_extract_data(obj);
-    }
-    r = tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL);
-    r |= tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL | TMC_FFCR_FLUSHMAN);
-    if (r != ERROR_OK)
-        return r;
-    obj->state = TMC_STOPPED;
-    return tmc_extract_data(obj);
+    return ERROR_OK;
 }
 
+/*
+ * Build "base.NN.ext" from "base.ext", or "base.NN" when the name carries no
+ * extension. Only a '.' in the final path component counts as an extension.
+ * Caller owns the returned string.
+ */
+static char *tmc_chunk_filename(const char *base, unsigned int index)
+{
+    const char *dot = strrchr(base, '.');
+    const char *slash = strrchr(base, '/');
+
+    if (dot && (!slash || dot > slash))
+        return alloc_printf("%.*s.%02u%s", (int)(dot - base), base, index, dot);
+
+    return alloc_printf("%s.%02u", base, index);
+}
+
+/*
+ * Each chunk is one capture session, and so is an independently decodable
+ * trace stream: the TMC stop sequence pads it out to a whole number of
+ * formatter frames, and the trace source re-synchronises at the start of the
+ * next session. Concatenating chunks would still deformat correctly, but it
+ * would hide the execution discontinuity between sessions from the decoder,
+ * which would then reconstruct control flow across a gap that never executed.
+ * Each chunk therefore gets its own file.
+ *
+ * Chunks are released as they are written, so the history does not grow
+ * without bound over a long debug session.
+ */
 COMMAND_HANDLER(tmc_trace_dump_handler)
 {
     struct tmc_object* obj = CMD_DATA;
+    struct tmc_trace_data_chunk *chunk, *tmp;
+    unsigned int index = 0;
+    uint64_t total = 0;
+
+    if (CMD_ARGC != 1)
+        return ERROR_COMMAND_SYNTAX_ERROR;
+
     if (list_empty(&obj->history.chunks)){
         command_print(CMD, "TMC %s: no trace data captured", obj->name);
         return ERROR_OK;
     }
-    struct tmc_trace_data_chunk* chunk;
-    list_for_each_entry(chunk, &obj->history.chunks, lh){
-        //We'll print 16 bytes per line, each byte is 0x..
-        //So in total we have 4*16 + 15 space + newline
-        //= 80 chars/bytes
-        int pos = 0;
-        for(uint32_t i = 0; i < chunk->byte_count; i += 16){
-            char line[80];
-            uint32_t n = (chunk->byte_count - i > 16) ? 16 : chunk->byte_count - i;
-            for(uint32_t j = 0; j < n; ++j){
-                pos += snprintf(line + pos, sizeof(line) - pos, "%02"PRIx32, chunk->buff[i + j]);
-                if(j != n){
-                    pos += snprintf(line + pos, sizeof(line) - pos, " ");
-                }
-            }
-            command_print(CMD, "%s", line);
+
+    command_print(CMD, "chunk  length file");
+
+    list_for_each_entry_safe(chunk, tmp, &obj->history.chunks, lh){
+        struct fileio *file;
+        size_t written;
+        int r;
+
+        char *path = tmc_chunk_filename(CMD_ARGV[0], index);
+        if (!path) {
+            LOG_ERROR("TMC %s: out of memory building chunk filename", obj->name);
+            return ERROR_FAIL;
         }
+
+        r = fileio_open(&file, path, FILEIO_WRITE, FILEIO_BINARY);
+        if (r != ERROR_OK) {
+            LOG_ERROR("TMC %s: cannot open '%s' for writing", obj->name, path);
+            free(path);
+            return r;
+        }
+
+        r = fileio_write(file, chunk->byte_count, chunk->buff, &written);
+        if (r == ERROR_OK && written != chunk->byte_count) {
+            LOG_ERROR("TMC %s: short write to '%s': %zu of %" PRIu32 " bytes",
+                    obj->name, path, written, chunk->byte_count);
+            r = ERROR_FILEIO_OPERATION_FAILED;
+        }
+        fileio_close(file);
+        if (r != ERROR_OK) {
+            free(path);
+            return r;
+        }
+
+        command_print(CMD, "%-6u %-6" PRIu32 " %s", index, chunk->byte_count, path);
+        free(path);
+
+        total += chunk->byte_count;
+        index++;
+
+        list_del(&chunk->lh);
+        free(chunk->buff);
+        free(chunk);
     }
+
+    command_print(CMD, "%s: %u chunks, %" PRIu64 " bytes", obj->name, index, total);
     return ERROR_OK;
 }
 static int jim_tmc_configure(Jim_Interp *interp, int argc, Jim_Obj *const *argv) {
@@ -697,9 +834,13 @@ static int jim_tmc_configure(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
   r = tmc_validate_config(obj);
   if(r != ERROR_OK)
       return JIM_ERR;
-  r = tmc_commit_config(obj, false);
-  if(r != ERROR_OK)
-      return JIM_ERR;
+  if (obj->state == TMC_DISABLED) {
+      r = tmc_commit_config(obj, false);
+      if(r != ERROR_OK)
+          return JIM_ERR;
+  } else {
+      LOG_INFO("TMC %s: configuration staged, will be applied at next resume", obj->name);
+  }
   return JIM_OK;
 }
 
@@ -716,21 +857,22 @@ static const struct command_registration tmc_instance_command_handlers[] = {
         .name = "enable",
         .mode = COMMAND_EXEC,
         .help = "",
-        .usage = "Start trace capture, it is recommended that this is hooked to runs or non-halting resets",
+        .usage = "Enables trace capture",
         .handler = tmc_enable_handler,
     },
     {
         .name = "disable",
         .mode = COMMAND_EXEC,
         .help = "",
-        .usage = "Stop trace capture, it is recommended that this is hooked to resets and halts",
+        .usage = "Disables trace capture",
         .handler = tmc_disable_handler,
     },
     {
         .name = "trace-dump",
         .mode = COMMAND_EXEC,
-        .help = "",
-        .usage = "Dumps trace data in raw format",
+        .help = "Writes each captured trace session to a separate binary file based on "
+                "<filename>. A session is the trace recorded between two halts.",
+        .usage = "<filename>",
         .handler = tmc_trace_dump_handler,
     },
     {
@@ -777,6 +919,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
   tmc_buff_init(obj);
   adiv5_mem_ap_spot_init(&obj->spot);
   obj->initialised = false;
+  obj->state = TMC_DISABLED;
 
   goi->isconfigure = 1;
   if(tmc_stage_config(obj, goi) != JIM_OK) {

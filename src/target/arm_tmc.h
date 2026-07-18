@@ -124,6 +124,12 @@ enum tmc_config_type {
  * This should represent the TMC's architectural state machine
  * Configuration should happen in the disabled state,
  * and data consumption should happen in the stopped state
+ *
+ * TMC_STOPPING and TMC_DISABLING are intentionally never assigned:
+ * stops are always performed synchronously (poll to completion), so
+ * Stopping collapses into Stopped from this driver's point of view,
+ * and no emergency-abort path (clearing TraceCaptEn while Running) is
+ * implemented, so Disabling never occurs.
  * */
 enum tmc_state {
     TMC_DISABLED,
@@ -182,6 +188,7 @@ struct tmc_object {
 	struct list_head            lh;
 	char                        *name;
 	bool                        initialised;
+	bool                        capture_requested;
     struct tmc_config_options   pending_config;
 
 	struct adiv5_mem_ap_spot    spot;
