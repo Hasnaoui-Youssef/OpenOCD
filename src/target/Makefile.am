@@ -112,7 +112,8 @@ ARM_DEBUG_SRC = \
 	%D%/etm_dummy.c \
 	%D%/arm_tpiu_swo.c \
 	%D%/arm_cti.c \
-	%D%/arm_tmc.c
+	%D%/arm_tmc.c \
+	%D%/arm_etmv4.c
 
 
 AVR32_SRC = \
@@ -232,6 +233,8 @@ ARC_SRC = \
 	%D%/lakemont.h \
 	%D%/x86_32_common.h \
 	%D%/arm_cti.h \
+	%D%/arm_tmc.h \
+	%D%/arm_etmv4.h \
 	%D%/esirisc.h \
 	%D%/esirisc_jtag.h \
 	%D%/esirisc_regs.h \
