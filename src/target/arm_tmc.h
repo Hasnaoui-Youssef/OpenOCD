@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "helper/command.h"
 #include "helper/list.h"
 
@@ -174,16 +175,6 @@ struct tmc_etr_config {
 };
 static_assert(sizeof(struct tmc_etr_config) == 2 * sizeof(uint64_t), "ETR config should be 16 bytes");
 
-struct tmc_trace_data_chunk {
-    struct list_head lh;
-    uint32_t byte_count; //In case the buffer isn't full at the time of reading
-    uint8_t* buff;
-};
-
-struct tmc_trace_history {
-    struct list_head chunks;
-};
-
 struct tmc_object {
 	struct list_head            lh;
 	char                        *name;
@@ -202,7 +193,18 @@ struct tmc_object {
 	uint32_t                    ram_size_words;
 
     struct tmc_etr_config       etr_config;
-    struct tmc_trace_history    history;
+
+    /*
+     * Trace output sink. out_filename holds the raw -output string and
+     * selects the sink: ":PORT" starts a TCP server, anything else non-empty
+     * is a file. The two are mutually exclusive by construction. The port
+     * substring handed to remove_service() points into out_filename, so that
+     * buffer must outlive the service.
+     */
+    char                        *out_filename;
+    FILE                        *file;
+    struct list_head            connections;
+    bool                        en_capture;
 };
 
 

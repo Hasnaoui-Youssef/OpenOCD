@@ -103,5 +103,16 @@ static inline bool is_valid_arm_cs_cidr(uint32_t cidr)
 #define ARM_CS_LAR_UNLOCK               0xC5ACCE55u
 #define ARM_CS_LSR_SLI                  BIT(1)
 
+/*
+ * Trace formatter frame synchronization packet, CoreSight IHI0029G D4.2.2.
+ * The value is emitted least significant bit first, so on the wire it is the
+ * byte sequence FF FF FF 7F. Trace source ID 0x7F is reserved (D4.2.4) so that
+ * this sequence cannot occur anywhere else in a formatted trace stream, which
+ * makes it usable as an unambiguous separator between captures.
+ */
+#define ARM_CS_FSYNC_PKT                0x7FFFFFFFu
+
+/* Formatter frame size, IHI0029G D4.2. */
+#define ARM_CS_FRAME_SIZE               16
 
 #endif /* OPENOCD_TARGET_ARM_CORESIGHT_H */

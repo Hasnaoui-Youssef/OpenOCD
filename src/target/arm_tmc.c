@@ -4,6 +4,7 @@
 #include "config.h"
 #endif
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,9 +12,9 @@
 #include <stdio.h>
 
 #include "helper/time_support.h"
-#include "helper/fileio.h"
 #include "helper/list.h"
 #include "helper/log.h"
+#include "server/server.h"
 
 #include "arm_adi_v5.h"
 #include "arm_coresight.h"
@@ -21,7 +22,42 @@
 
 #include "arm_tmc.h"
 
+#define TMC_TCP_SERVICE_NAME        "tmc_trace"
+
+/* Give a stalled client this long to drain before we give up on it. */
+#define TMC_WRITE_TIMEOUT_MS        1000
+
 static LIST_HEAD(all_tmc);
+
+/*
+ * Per-client node. The server keeps its own connection list but exposes no way
+ * to iterate it, so we track attached clients ourselves for the fan-out.
+ */
+struct tmc_connection {
+    struct list_head lh;
+    struct connection *connection;
+};
+
+/*
+ * Handed to add_service() as its priv pointer, purely to get from a
+ * struct connection back to the owning TMC. The server frees this with a plain
+ * free(), so it must stay a flat allocation.
+ */
+struct tmc_priv_connection {
+    struct tmc_object *obj;
+};
+
+/*
+ * One full formatter frame of ARM_CS_FSYNC_PKT, written between captures so a
+ * decoder can tell where one session ends and the next begins. A whole frame
+ * rather than a single packet keeps the stream a multiple of the frame size,
+ * so every session after the first stays frame aligned. Spelled out as bytes
+ * because the packet is defined by its on-the-wire order, not by host layout.
+ */
+static const uint8_t tmc_fsync_barrier[ARM_CS_FRAME_SIZE] = {
+    0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0x7F,
+    0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0x7F,
+};
 
 static int jim_get_goi_obj(Jim_Interp *interp,
                            struct tmc_object **obj,
@@ -140,21 +176,199 @@ static int tmc_poll_bit(struct tmc_object *obj, uint32_t offset, uint32_t mask,
 }
 
 /***************************************
- * Misc functions
+ * Trace output
  **************************************/
-static struct tmc_trace_data_chunk* tmc_create_chunk(struct tmc_object *obj, uint32_t count)
+
+static int tmc_service_new_connection(struct connection *connection)
 {
-  struct tmc_trace_data_chunk *chunk = calloc(1, sizeof(struct tmc_trace_data_chunk));
-  if(!chunk)
-      return NULL;
-  INIT_LIST_HEAD(&chunk->lh);
-  chunk->byte_count = count * sizeof(uint32_t);
-  chunk->buff = malloc(chunk->byte_count);
-  if(!chunk->buff){
-      free(chunk);
-      return NULL;
-  }
-  return chunk;
+    struct tmc_priv_connection *priv = connection->service->priv;
+    struct tmc_object *obj = priv->obj;
+
+    struct tmc_connection *c = malloc(sizeof(*c));
+    if (!c) {
+        LOG_ERROR("TMC %s: out of memory accepting trace connection", obj->name);
+        return ERROR_CONNECTION_REJECTED;
+    }
+    c->connection = connection;
+    list_add(&c->lh, &obj->connections);
+    return ERROR_OK;
+}
+
+/*
+ * The trace port is write-only. We only read to notice the client going away,
+ * since a failed write alone does not tell us the socket is dead.
+ */
+static int tmc_service_input(struct connection *connection)
+{
+    long dummy;
+    int bytes_read = connection_read(connection, &dummy, sizeof(dummy));
+
+    if (bytes_read == 0)
+        return ERROR_SERVER_REMOTE_CLOSED;
+    if (bytes_read == -1) {
+        LOG_ERROR("TMC: error reading from trace connection: %s", strerror(errno));
+        return ERROR_SERVER_REMOTE_CLOSED;
+    }
+    return ERROR_OK;
+}
+
+static int tmc_service_connection_closed(struct connection *connection)
+{
+    struct tmc_priv_connection *priv = connection->service->priv;
+    struct tmc_object *obj = priv->obj;
+    struct tmc_connection *c, *tmp;
+
+    list_for_each_entry_safe(c, tmp, &obj->connections, lh) {
+        if (c->connection == connection) {
+            list_del(&c->lh);
+            free(c);
+            return ERROR_OK;
+        }
+    }
+    LOG_ERROR("TMC %s: failed to find trace connection to close", obj->name);
+    return ERROR_FAIL;
+}
+
+static const struct service_driver tmc_service_driver = {
+    .name = TMC_TCP_SERVICE_NAME,
+    .new_connection_during_keep_alive_handler = NULL,
+    .new_connection_handler = tmc_service_new_connection,
+    .input_handler = tmc_service_input,
+    .connection_closed_handler = tmc_service_connection_closed,
+    .keep_client_alive_handler = NULL,
+};
+
+static int tmc_open_output(struct tmc_object *obj)
+{
+    int r;
+
+    /* Re-enabling must not bind the port or reopen the file a second time. */
+    if (obj->en_capture)
+        return ERROR_OK;
+
+    if (!obj->out_filename || !obj->out_filename[0])
+        return ERROR_OK;
+
+    if (obj->out_filename[0] == ':') {
+        struct tmc_priv_connection *priv = malloc(sizeof(*priv));
+        if (!priv) {
+            LOG_ERROR("TMC %s: out of memory", obj->name);
+            return ERROR_FAIL;
+        }
+        priv->obj = obj;
+        LOG_INFO("TMC %s: starting trace server on %s", obj->name, &obj->out_filename[1]);
+        r = add_service(&tmc_service_driver, &obj->out_filename[1],
+                CONNECTION_LIMIT_UNLIMITED, priv);
+        if (r != ERROR_OK) {
+            LOG_ERROR("TMC %s: cannot open trace TCP port %s",
+                    obj->name, &obj->out_filename[1]);
+            free(priv);
+            return r;
+        }
+    } else {
+        obj->file = fopen(obj->out_filename, "ab");
+        if (!obj->file) {
+            LOG_ERROR("TMC %s: cannot open trace destination file \"%s\": %s",
+                    obj->name, obj->out_filename, strerror(errno));
+            return ERROR_FAIL;
+        }
+    }
+
+    obj->en_capture = true;
+    return ERROR_OK;
+}
+
+/*
+ * Must run before out_filename or the object itself is freed: the port string
+ * passed to remove_service() points into out_filename, and remove_service()
+ * synchronously calls back into tmc_service_connection_closed() for every
+ * attached client, which dereferences obj.
+ */
+static void tmc_close_output(struct tmc_object *obj)
+{
+    if (obj->file) {
+        fclose(obj->file);
+        obj->file = NULL;
+    }
+    if (obj->out_filename && obj->out_filename[0] == ':')
+        remove_service(TMC_TCP_SERVICE_NAME, &obj->out_filename[1]);
+
+    obj->en_capture = false;
+}
+
+/*
+ * connection_write() is a thin, non-looping wrapper around write(), so a large
+ * capture can be partially sent. Keep going until it is all out, treating a
+ * would-block as backpressure rather than an error.
+ */
+static int tmc_connection_write_all(struct connection *connection,
+        const uint8_t *buf, size_t size)
+{
+    size_t sent = 0;
+    int64_t deadline = timeval_ms() + TMC_WRITE_TIMEOUT_MS;
+
+    while (sent < size) {
+        int n = connection_write(connection, buf + sent, (int)(size - sent));
+        if (n > 0) {
+            sent += (size_t)n;
+            continue;
+        }
+
+        /* Nothing moved. Retry only while the socket is merely full. */
+#ifdef _WIN32
+        bool retry = (WSAGetLastError() == WSAEWOULDBLOCK);
+#else
+        bool retry = (errno == EAGAIN || errno == EINTR);
+#endif
+        if (!retry)
+            return ERROR_FAIL;
+        if (timeval_ms() > deadline)
+            return ERROR_TIMEOUT_REACHED;
+
+        /* Plain usleep, not alive_sleep: the latter re-enters keep_alive(). */
+        usleep(1000);
+    }
+    return ERROR_OK;
+}
+
+/*
+ * Push one capture to whichever sink is configured, preceded by a frame-sync
+ * barrier. File and TCP are mutually exclusive, so a file write failure ends
+ * the call rather than falling through to the fan-out.
+ */
+static int tmc_output_write(struct tmc_object *obj, const uint8_t *buf, size_t size)
+{
+    struct tmc_connection *c;
+
+    if (!obj->en_capture)
+        return ERROR_OK;
+
+    if (obj->file) {
+        if (fwrite(tmc_fsync_barrier, 1, sizeof(tmc_fsync_barrier), obj->file)
+                    != sizeof(tmc_fsync_barrier) ||
+                fwrite(buf, 1, size, obj->file) != size) {
+            LOG_ERROR("TMC %s: error writing to trace destination file", obj->name);
+            return ERROR_FAIL;
+        }
+        fflush(obj->file);
+        return ERROR_OK;
+    }
+
+    /*
+     * A failed client is left attached: there is no public API to close a
+     * single connection, and the server reaps it on its own once select()
+     * reports the dead socket and tmc_service_input() sees the EOF.
+     */
+    list_for_each_entry(c, &obj->connections, lh) {
+        int r = tmc_connection_write_all(c->connection, tmc_fsync_barrier,
+                sizeof(tmc_fsync_barrier));
+        if (r == ERROR_OK)
+            r = tmc_connection_write_all(c->connection, buf, size);
+        if (r != ERROR_OK)
+            LOG_ERROR("TMC %s: failed to send %zu bytes of trace to a client",
+                    obj->name, size);
+    }
+    return ERROR_OK;
 }
 
 /**
@@ -209,21 +423,27 @@ static int tmc_extract_data(struct tmc_object* obj)
             return tmc_write32(obj, TMC_CTL, 0);
         }
 
-        struct tmc_trace_data_chunk *chunk = tmc_create_chunk(obj, buff_level_words);
-        if(!chunk) {
+        size_t byte_count = (size_t)buff_level_words * sizeof(uint32_t);
+        uint8_t *buff = malloc(byte_count);
+        if (!buff) {
+            LOG_ERROR("TMC %s: out of memory for %zu bytes of trace data",
+                    obj->name, byte_count);
             return ERROR_FAIL;
         }
-        r = tmc_read_trace_buff(obj, chunk->buff, buff_level_words);
+        r = tmc_read_trace_buff(obj, buff, buff_level_words);
         if (r != ERROR_OK) {
             LOG_ERROR("TMC %s: failed to read %" PRIu32 " words of trace data",
                     obj->name, buff_level_words);
-            free(chunk->buff);
-            free(chunk);
+            free(buff);
             return r;
         }
-        list_add_tail(&chunk->lh, &obj->history.chunks);
-        LOG_DEBUG("TMC %s: captured %" PRIu32 " bytes of trace data%s", obj->name,
-                chunk->byte_count, (sts_val & TMC_STS_FULL) ? " (buffer wrapped)" : "");
+        LOG_DEBUG("TMC %s: captured %zu bytes of trace data%s", obj->name,
+                byte_count, (sts_val & TMC_STS_FULL) ? " (buffer wrapped)" : "");
+
+        r = tmc_output_write(obj, buff, byte_count);
+        free(buff);
+        if (r != ERROR_OK)
+            return r;
 
         obj->state = TMC_DISABLED;
         return tmc_write32(obj, TMC_CTL, 0);
@@ -323,6 +543,19 @@ static int tmc_stop_and_extract(struct tmc_object *obj)
     return tmc_extract_data(obj);
 }
 
+static int tmc_unlock(struct tmc_object *obj) {
+  uint32_t lsr;
+  int retval = tmc_read32(obj, ARM_CS_LSR, &lsr);
+  if (retval != ERROR_OK)
+    return retval;
+
+  if (!(lsr & ARM_CS_LSR_SLI)) {
+    LOG_DEBUG("TMC %s: lock not enforced on this AP, skipping LAR", obj->name);
+    return ERROR_OK;
+  }
+  return tmc_write32(obj, ARM_CS_LAR, ARM_CS_LAR_UNLOCK);
+}
+
 static int tmc_target_callback_event_handler(struct target *target,
         enum target_event event,
         void *priv)
@@ -332,6 +565,9 @@ static int tmc_target_callback_event_handler(struct target *target,
     switch(event) {
     case TARGET_EVENT_RESET_END:
         obj->state = TMC_DISABLED;
+        r = tmc_unlock(obj);
+        if(r != ERROR_OK)
+            return r;
         return tmc_commit_config(obj, true);
     case TARGET_EVENT_RESUME_START:
         if (!obj->capture_requested || obj->state != TMC_DISABLED)
@@ -350,19 +586,6 @@ static int tmc_target_callback_event_handler(struct target *target,
     default:
         return ERROR_OK;
     }
-}
-
-static int tmc_unlock(struct tmc_object *obj) {
-  uint32_t lsr;
-  int retval = tmc_read32(obj, ARM_CS_LSR, &lsr);
-  if (retval != ERROR_OK)
-    return retval;
-
-  if (!(lsr & ARM_CS_LSR_SLI)) {
-    LOG_DEBUG("TMC %s: lock not enforced on this AP, skipping LAR", obj->name);
-    return ERROR_OK;
-  }
-  return tmc_write32(obj, ARM_CS_LAR, ARM_CS_LAR_UNLOCK);
 }
 
 static int tmc_validate_identity(struct tmc_object *obj) {
@@ -419,22 +642,6 @@ static int tmc_validate_identity(struct tmc_object *obj) {
   return ERROR_OK;
 }
 
-static int tmc_buff_init(struct tmc_object* obj)
-{
-    INIT_LIST_HEAD(&obj->history.chunks);
-    return ERROR_OK;
-}
-static int tmc_buff_free(struct tmc_object* obj)
-{
-    struct tmc_trace_data_chunk *chunk, *temp;
-    list_for_each_entry_safe(chunk, temp, &obj->history.chunks, lh)
-    {
-        list_del(&chunk->lh);
-        free(chunk->buff);
-        free(chunk);
-    }
-    return ERROR_OK;
-}
 
 
 static int tmc_instance_init(struct tmc_object *obj) {
@@ -471,10 +678,6 @@ static int tmc_instance_init(struct tmc_object *obj) {
            : obj->config_type == TMC_CONFIG_ETR ? "ETR"
                                                 : "ETF",
            (uint64_t)obj->spot.base, (unsigned int)obj->spot.ap_num);
-  if (obj->state != TMC_DISABLED) {
-    LOG_ERROR("TMC %s: cannot commit initial configuration, device not disabled", obj->name);
-    return ERROR_FAIL;
-  }
   retval = tmc_commit_config(obj, true);
   if(retval != ERROR_OK) {
       LOG_ERROR("TMC %s: Unable to write configuration to device", obj->name);
@@ -509,6 +712,7 @@ enum tmc_cfg_param {
   CFG_PRIVILEGED,
   CFG_ETR_SCATTER_GATHER,
   CFG_AXI_CTL,
+  CFG_OUTFILE,
 };
 
 static const struct jim_nvp nvp_tmc_cfg_opts[] = {
@@ -525,6 +729,7 @@ static const struct jim_nvp nvp_tmc_cfg_opts[] = {
     {.name = "-axi-secure",         .value = CFG_SECURE             },
     {.name = "-axi-privileged",     .value = CFG_PRIVILEGED         },
     {.name = "-axi-ctl",            .value = CFG_AXI_CTL            },
+    {.name = "-output",             .value = CFG_OUTFILE            },
     {.name = "-dap",                .value = -1                     },
     {.name = "-ap-num",             .value = -1                     },
     {.name = "-baseaddr",           .value = -1                     },
@@ -693,6 +898,45 @@ static int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi)
         if(w & 0x30U) {
             obj->pending_config.axi_cache_alloc_set = 1;
         }
+        break;
+    }
+    case CFG_OUTFILE: {
+        if (!goi->isconfigure) {
+            if (obj->out_filename)
+                Jim_SetResult(interp,
+                        Jim_NewStringObj(interp, obj->out_filename, -1));
+            break;
+        }
+        /*
+         * The live service holds a pointer into out_filename, so the string
+         * cannot be swapped while the sink is open.
+         */
+        if (obj->en_capture) {
+            Jim_SetResultFormatted(interp,
+                    "TMC %s: cannot change -output while trace output is open",
+                    obj->name);
+            return JIM_ERR;
+        }
+        const char *s;
+        e = jim_getopt_string(goi, &s, NULL);
+        if (e != JIM_OK)
+            return e;
+        if (s[0] == ':') {
+            char *end;
+            long port = strtol(s + 1, &end, 0);
+            if (port <= 0 || port > UINT16_MAX || *end != '\0') {
+                Jim_SetResultFormatted(interp,
+                        "TMC %s: invalid TCP port '%s'", obj->name, s + 1);
+                return JIM_ERR;
+            }
+        }
+        free(obj->out_filename);
+        obj->out_filename = strdup(s);
+        if (!obj->out_filename) {
+            LOG_ERROR("TMC: out of memory");
+            return JIM_ERR;
+        }
+        break;
     }
     };
   }
@@ -704,8 +948,12 @@ static int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi)
 
 COMMAND_HANDLER(tmc_enable_handler) {
   struct tmc_object *obj = CMD_DATA;
+  int r;
   if (!obj->initialised)
     return ERROR_FAIL;
+  r = tmc_open_output(obj);
+  if (r != ERROR_OK)
+    return r;
   obj->capture_requested = true;
   return ERROR_OK;
 }
@@ -720,101 +968,17 @@ COMMAND_HANDLER(tmc_enable_handler) {
 COMMAND_HANDLER(tmc_disable_handler)
 {
     struct tmc_object* obj = CMD_DATA;
+    int r = ERROR_OK;
+
     obj->capture_requested = false;
     if (obj->state == TMC_STOPPED)
-        return tmc_extract_data(obj);
-    return ERROR_OK;
+        r = tmc_extract_data(obj);
+
+    /* Drain first, so the last capture still reaches the sink. */
+    tmc_close_output(obj);
+    return r;
 }
 
-/*
- * Build "base.NN.ext" from "base.ext", or "base.NN" when the name carries no
- * extension. Only a '.' in the final path component counts as an extension.
- * Caller owns the returned string.
- */
-static char *tmc_chunk_filename(const char *base, unsigned int index)
-{
-    const char *dot = strrchr(base, '.');
-    const char *slash = strrchr(base, '/');
-
-    if (dot && (!slash || dot > slash))
-        return alloc_printf("%.*s.%02u%s", (int)(dot - base), base, index, dot);
-
-    return alloc_printf("%s.%02u", base, index);
-}
-
-/*
- * Each chunk is one capture session, and so is an independently decodable
- * trace stream: the TMC stop sequence pads it out to a whole number of
- * formatter frames, and the trace source re-synchronises at the start of the
- * next session. Concatenating chunks would still deformat correctly, but it
- * would hide the execution discontinuity between sessions from the decoder,
- * which would then reconstruct control flow across a gap that never executed.
- * Each chunk therefore gets its own file.
- *
- * Chunks are released as they are written, so the history does not grow
- * without bound over a long debug session.
- */
-COMMAND_HANDLER(tmc_trace_dump_handler)
-{
-    struct tmc_object* obj = CMD_DATA;
-    struct tmc_trace_data_chunk *chunk, *tmp;
-    unsigned int index = 0;
-    uint64_t total = 0;
-
-    if (CMD_ARGC != 1)
-        return ERROR_COMMAND_SYNTAX_ERROR;
-
-    if (list_empty(&obj->history.chunks)){
-        command_print(CMD, "TMC %s: no trace data captured", obj->name);
-        return ERROR_OK;
-    }
-
-    command_print(CMD, "chunk  length file");
-
-    list_for_each_entry_safe(chunk, tmp, &obj->history.chunks, lh){
-        struct fileio *file;
-        size_t written;
-        int r;
-
-        char *path = tmc_chunk_filename(CMD_ARGV[0], index);
-        if (!path) {
-            LOG_ERROR("TMC %s: out of memory building chunk filename", obj->name);
-            return ERROR_FAIL;
-        }
-
-        r = fileio_open(&file, path, FILEIO_WRITE, FILEIO_BINARY);
-        if (r != ERROR_OK) {
-            LOG_ERROR("TMC %s: cannot open '%s' for writing", obj->name, path);
-            free(path);
-            return r;
-        }
-
-        r = fileio_write(file, chunk->byte_count, chunk->buff, &written);
-        if (r == ERROR_OK && written != chunk->byte_count) {
-            LOG_ERROR("TMC %s: short write to '%s': %zu of %" PRIu32 " bytes",
-                    obj->name, path, written, chunk->byte_count);
-            r = ERROR_FILEIO_OPERATION_FAILED;
-        }
-        fileio_close(file);
-        if (r != ERROR_OK) {
-            free(path);
-            return r;
-        }
-
-        command_print(CMD, "%-6u %-6" PRIu32 " %s", index, chunk->byte_count, path);
-        free(path);
-
-        total += chunk->byte_count;
-        index++;
-
-        list_del(&chunk->lh);
-        free(chunk->buff);
-        free(chunk);
-    }
-
-    command_print(CMD, "%s: %u chunks, %" PRIu64 " bytes", obj->name, index, total);
-    return ERROR_OK;
-}
 static int jim_tmc_configure(Jim_Interp *interp, int argc, Jim_Obj *const *argv) {
   struct jim_getopt_info goi;
   struct tmc_object* obj;
@@ -868,14 +1032,6 @@ static const struct command_registration tmc_instance_command_handlers[] = {
         .handler = tmc_disable_handler,
     },
     {
-        .name = "trace-dump",
-        .mode = COMMAND_EXEC,
-        .help = "Writes each captured trace session to a separate binary file based on "
-                "<filename>. A session is the trace recorded between two halts.",
-        .usage = "<filename>",
-        .handler = tmc_trace_dump_handler,
-    },
-    {
         .name = "configure",
         .mode = COMMAND_EXEC,
         .help = "",
@@ -916,7 +1072,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
     return JIM_ERR;
   }
 
-  tmc_buff_init(obj);
+  INIT_LIST_HEAD(&obj->connections);
   adiv5_mem_ap_spot_init(&obj->spot);
   obj->initialised = false;
   obj->state = TMC_DISABLED;
@@ -925,6 +1081,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
   if(tmc_stage_config(obj, goi) != JIM_OK) {
     Jim_SetResultString(goi->interp,
                         "Unable to configure TMC", -1);
+      free(obj->out_filename);
       free(obj->name);
       free(obj);
       return JIM_ERR;
@@ -933,6 +1090,7 @@ static int tmc_create(struct jim_getopt_info *goi) {
   if (!obj->ap) {
     Jim_SetResultString(goi->interp,
                         "Unable to configure DAP for TMC", -1);
+    free(obj->out_filename);
     free(obj->name);
     free(obj);
     return JIM_ERR;
@@ -1007,12 +1165,13 @@ int tmc_cleanup_all(void) {
   struct tmc_object *obj, *tmp;
 
   list_for_each_entry_safe(obj, tmp, &all_tmc, lh) {
-    tmc_buff_free(obj);
+    tmc_close_output(obj);
     list_del(&obj->lh);
     if (obj->ap) {
       dap_put_ap(obj->ap);
       obj->ap = NULL;
     }
+    free(obj->out_filename);
     free(obj->name);
     free(obj);
   }
