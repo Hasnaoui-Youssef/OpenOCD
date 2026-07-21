@@ -445,14 +445,19 @@ static int etmv4_validate_config(struct etmv4_object *obj)
 /*
  * Applies the capability-dependent parts of the cached configuration once the
  * capabilities are known: features that are always enabled when implemented
- * (conditional instruction tracing, tracing of system error exceptions), and
- * defaults that must degrade when not implemented (branch broadcasting).
+ * (tracing of system error exceptions), and defaults that must degrade when
+ * not implemented (branch broadcasting).
+ *
+ * Conditional non-branch instruction tracing (TRCCONFIGR.COND) is left
+ * disabled even when implemented: there is no -cond-trace staging option to
+ * turn it back off, and common decoders (e.g. OpenCSD's ETMv4I decoder)
+ * reject any stream with COND != disabled outright (OCSD_ERR_HW_CFG_UNSUPP),
+ * so defaulting it on breaks decoding for every consumer with no way out.
  */
 static void etmv4_apply_caps_config(struct etmv4_object *obj)
 {
     const struct etmv4_caps *caps = &obj->caps;
 
-    obj->configr.cond = caps->cond_tracing ? ETMV4_TRCCONFIGR_COND_ALL : 0;
     obj->victlr.trcerr = caps->trcerr;
     /* TRCCONFIGR.VMIDOPT is RES0/RES1 unless the hardware makes it selectable */
     if (caps->vmidopt != 1)

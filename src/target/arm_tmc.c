@@ -95,7 +95,7 @@ static int tmc_queue_read32(struct tmc_object *obj, uint32_t offset,
 
 static int tmc_read_trace_buff(struct tmc_object *obj, uint8_t* buff, uint32_t count)
 {
-  return mem_ap_read_buf_noincr(obj->ap, buff, 4, count, TMC_RRD);
+  return mem_ap_read_buf_noincr(obj->ap, buff, 4, count, obj->spot.base + TMC_RRD);
 }
 
 static int tmc_dap_run(struct tmc_object *obj) {
