@@ -1,0 +1,25 @@
+openocd_add_object_library(rtos
+    rtos.c
+    rtos_standard_stackings.c
+    rtos_ecos_stackings.c
+    rtos_chibios_stackings.c
+    rtos_embkernel_stackings.c
+    rtos_mqx_stackings.c
+    rtos_ucos_iii_stackings.c
+    rtos_riot_stackings.c
+    rtos_nuttx_stackings.c
+    FreeRTOS.c
+    ThreadX.c
+    eCos.c
+    linux.c
+    chibios.c
+    chromium-ec.c
+    embKernel.c
+    mqx.c
+    uCOS-III.c
+    nuttx.c
+    rtkernel.c
+    hwthread.c
+    zephyr.c
+    riot.c
+)

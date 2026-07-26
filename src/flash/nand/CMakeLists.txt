@@ -1,0 +1,27 @@
+openocd_add_object_library(flash_nand_core
+    ecc.c
+    ecc_kw.c
+    core.c
+    fileio.c
+    tcl.c
+    arm_io.c
+    driver.c
+)
+
+openocd_add_object_library(flash_nand_drivers
+    nonce.c
+    davinci.c
+    lpc3180.c
+    lpc32xx.c
+    mxc.c
+    mx3.c
+    orion.c
+    s3c24xx.c
+    s3c2410.c
+    s3c2412.c
+    s3c2440.c
+    s3c2443.c
+    s3c6400.c
+    at91sam9.c
+    nuc910.c
+)

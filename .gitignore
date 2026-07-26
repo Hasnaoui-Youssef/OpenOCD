@@ -10,6 +10,7 @@
 *.lo
 *.la
 *.in
+!cmake/*.in
 
 # generated source files
 src/jtag/minidriver_imp.h
@@ -111,3 +112,8 @@ GTAGS
 # A compile_commands.json can be generated using bear and will help tools such
 # as clangd to locate header files and use correct $CFLAGS
 compile_commands.json
+
+/build/
+/build_test/
+CMakeCache.txt
+CMakeFiles/

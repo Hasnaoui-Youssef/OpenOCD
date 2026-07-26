@@ -1,0 +1,15 @@
+openocd_add_object_library(pld
+    certus.c
+    ecp2_3.c
+    ecp5.c
+    efinix.c
+    gatemate.c
+    gowin.c
+    intel.c
+    lattice.c
+    lattice_bit.c
+    pld.c
+    raw_bit.c
+    xilinx_bit.c
+    virtex2.c
+)

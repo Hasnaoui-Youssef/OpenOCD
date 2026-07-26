@@ -1,0 +1,9 @@
+/* Only two macros from libjaylink's config.h are load-bearing (grep-
+ * confirmed against every .c in libjaylink/libjaylink/): HAVE_LIBUSB
+ * (core.c, device.c, discovery.c, transport.c, libjaylink-internal.h) and
+ * WORDS_BIGENDIAN (buffer.c only). Both are #ifdef-tested, plain
+ * define-or-absent macros. Everything else in the reference config.h.in (HAVE_*_H
+ * header checks, STDC_HEADERS, PACKAGE*, VERSION, LT_OBJDIR,
+ * AC_APPLE_UNIVERSAL_BUILD) is vestigial - referenced by no source file. */
+#cmakedefine HAVE_LIBUSB 1
+#cmakedefine WORDS_BIGENDIAN 1

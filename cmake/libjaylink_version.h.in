@@ -1,0 +1,18 @@
+#ifndef LIBJAYLINK_VERSION_H
+#define LIBJAYLINK_VERSION_H
+
+/* Static values for the vendored submodule's tag 0.3.1 (see
+ * libjaylink/m4/jaylink.m4 for how upstream's ./configure derives these;
+ * the only dynamic input there is an optional `git describe --dirty` for
+ * the package string, which we don't reproduce since it isn't load-bearing
+ * for anything beyond the version accessors in libjaylink/version.c). */
+#define JAYLINK_VERSION_PACKAGE_MAJOR      0
+#define JAYLINK_VERSION_PACKAGE_MINOR      3
+#define JAYLINK_VERSION_PACKAGE_MICRO      1
+#define JAYLINK_VERSION_PACKAGE_STRING     "0.3.1"
+#define JAYLINK_VERSION_LIBRARY_CURRENT    2
+#define JAYLINK_VERSION_LIBRARY_REVISION   0
+#define JAYLINK_VERSION_LIBRARY_AGE        2
+#define JAYLINK_VERSION_LIBRARY_STRING     "2:0:2"
+
+#endif /* LIBJAYLINK_VERSION_H */

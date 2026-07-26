@@ -1,0 +1,15 @@
+openocd_add_object_library(target_espressif
+    esp_xtensa.c
+    esp_xtensa_smp.c
+    esp_xtensa_semihosting.c
+    esp_xtensa_apptrace.c
+    esp_xtensa_algorithm.c
+    esp32_apptrace.c
+    esp32.c
+    esp32s2.c
+    esp32s3.c
+    esp.c
+    esp32_sysview.c
+    esp_semihosting.c
+    esp_algorithm.c
+)
