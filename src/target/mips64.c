@@ -358,7 +358,7 @@ int mips64_arch_state(struct target *target)
 
 	if (mips64->common_magic != MIPS64_COMMON_MAGIC) {
 		LOG_ERROR("BUG: called for a non-MIPS64 target");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	LOG_USER("target halted due to %s, pc: 0x%" PRIx64 "",

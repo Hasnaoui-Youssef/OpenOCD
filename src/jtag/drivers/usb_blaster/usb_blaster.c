@@ -417,7 +417,7 @@ static void ublast_queue_bytes(uint8_t *bytes, int nb_bytes)
 	if (info.bufidx + nb_bytes > BUF_LEN) {
 		LOG_ERROR("buggy code, should never queue more that %d bytes",
 			  info.bufidx + nb_bytes);
-		exit(-1);
+		openocd_exit(-1);
 	}
 	LOG_DEBUG_IO("(nb_bytes=%d, bytes=[0x%02x, ...])", nb_bytes,
 		      bytes ? bytes[0] : 0);

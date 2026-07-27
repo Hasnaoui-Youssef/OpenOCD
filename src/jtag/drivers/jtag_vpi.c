@@ -143,13 +143,13 @@ retry_write:
 		log_socket_error("jtag_vpi xmit");
 		/* TODO: Clean way how adapter drivers can report fatal errors
 		   to upper layers of OpenOCD and let it perform an orderly shutdown? */
-		exit(-1);
+		openocd_exit(-1);
 	} else if (retval < (int)sizeof(struct vpi_cmd)) {
 		/* This means we could not send all data, which is most likely fatal
 		   for the jtag_vpi connection (the underlying TCP connection likely not
 		   usable anymore) */
 		LOG_ERROR("jtag_vpi: Could not send all data through jtag_vpi connection.");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	/* Otherwise the packet has been sent successfully. */
@@ -177,11 +177,11 @@ static int jtag_vpi_receive_cmd(struct vpi_cmd *vpi)
 #endif
 			/* Otherwise, this is an error when accessing the socket. */
 			log_socket_error("jtag_vpi recv");
-			exit(-1);
+			openocd_exit(-1);
 		} else if (retval == 0) {
 			/* Connection closed by the other side */
 			LOG_ERROR("Connection prematurely closed by jtag_vpi server.");
-			exit(-1);
+			openocd_exit(-1);
 		}
 		/* Otherwise, we have successfully received some data */
 		bytes_buffered += retval;

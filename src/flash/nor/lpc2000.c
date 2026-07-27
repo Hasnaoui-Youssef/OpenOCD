@@ -374,7 +374,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 			}
 		} else {
 			LOG_ERROR("BUG: unknown bank->size encountered");
-			exit(-1);
+			openocd_exit(-1);
 		}
 	} else if (lpc2000_info->variant == LPC2000_V2) {
 		lpc2000_info->cmd51_dst_boundary = 256;
@@ -415,7 +415,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 				break;
 		}
 
@@ -478,7 +478,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
@@ -508,7 +508,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
@@ -552,7 +552,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
@@ -573,7 +573,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 		if ((bank->size % (4 * 1024)) != 0) {
 			LOG_ERROR("BUG: unknown bank->size encountered,\nLPC1100 flash size must be a multiple of 4096");
-			exit(-1);
+			openocd_exit(-1);
 		}
 		lpc2000_info->cmd51_max_buffer = 512; /* smallest MCU in the series, LPC1110, has 1 kB of SRAM */
 		unsigned int large_sectors = 0;
@@ -613,7 +613,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
@@ -641,7 +641,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown bank->size encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 
 		bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
@@ -657,7 +657,7 @@ static int lpc2000_build_sector_list(struct flash_bank *bank)
 
 	} else {
 		LOG_ERROR("BUG: unknown lpc2000_info->variant encountered");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	return ERROR_OK;
@@ -703,7 +703,7 @@ static int lpc2000_iap_working_area_init(struct flash_bank *bank, struct working
 			break;
 		default:
 			LOG_ERROR("BUG: unknown lpc2000_info->variant encountered");
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	int retval = target_write_memory(target, (*iap_working_area)->address, 4, 2, jump_gate);
@@ -758,7 +758,7 @@ static int lpc2000_iap_call(struct flash_bank *bank, struct working_area *iap_wo
 			break;
 		default:
 			LOG_ERROR("BUG: unknown lpc2000->variant encountered");
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	if (lpc2000_info->iap_entry_alternative != 0x0)
@@ -827,7 +827,7 @@ static int lpc2000_iap_call(struct flash_bank *bank, struct working_area *iap_wo
 			break;
 		default:
 			LOG_ERROR("BUG: unknown lpc2000->variant encountered");
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	int status_code = target_buffer_get_u32(target, mem_params[1].value);
@@ -894,7 +894,7 @@ static int lpc2000_iap_blank_check(struct flash_bank *bank, unsigned int first,
 				break;
 			default:
 				LOG_ERROR("BUG: unknown LPC2000 status code %i", status_code);
-				exit(-1);
+				openocd_exit(-1);
 		}
 	}
 
@@ -1500,7 +1500,7 @@ static int lpc2000_auto_probe_flash(struct flash_bank *bank)
 
 		default:
 			LOG_ERROR("BUG: unknown Part ID encountered: 0x%" PRIx32, part_id);
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	return ERROR_OK;

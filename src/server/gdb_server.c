@@ -1199,7 +1199,7 @@ static void gdb_target_to_reg(struct target *target,
 {
 	if (str_len % 2) {
 		LOG_ERROR("BUG: gdb value with uneven number of characters encountered");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	int i;
@@ -1207,7 +1207,7 @@ static void gdb_target_to_reg(struct target *target,
 		unsigned t;
 		if (sscanf(tstr + i, "%02x", &t) != 1) {
 			LOG_ERROR("BUG: unable to convert register value");
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		int j = gdb_reg_pos(target, i/2, str_len/2);

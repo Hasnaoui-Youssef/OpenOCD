@@ -628,7 +628,7 @@ static void syncbb_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -686,7 +686,7 @@ static void syncbb_path_move(struct pathmove_command *cmd)
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(cmd->path[state_count]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		ft232r_write(0, tms, 0);
@@ -884,7 +884,7 @@ static int syncbb_execute_queue(struct jtag_command *cmd_queue)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown JTAG command type encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 		if (ft232r_output_len > 0)
 			ft232r_send_recv();

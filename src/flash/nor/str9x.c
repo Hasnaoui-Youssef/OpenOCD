@@ -95,7 +95,7 @@ static int str9x_build_block_list(struct flash_bank *bank)
 			break;
 		default:
 			LOG_ERROR("BUG: unknown bank->size encountered");
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	num_sectors = b0_sectors + b1_sectors;

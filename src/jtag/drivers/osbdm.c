@@ -652,7 +652,7 @@ static int osbdm_execute_queue(struct jtag_command *cmd_queue)
 
 	if (retval != ERROR_OK) {
 		LOG_ERROR("FATAL: can't execute jtag command");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	return retval;

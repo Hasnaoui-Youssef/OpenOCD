@@ -337,11 +337,11 @@ int dsp5680xx_f_erase(struct target *target, int first, int last);
  * a 0 implies the sector is not protected.
  *
  * @param target
- * @param protected Data read from the protection register.
+ * @param protected_ Data read from the protection register.
  *
  * @return
  */
-int dsp5680xx_f_protect_check(struct target *target, uint16_t *protected);
+int dsp5680xx_f_protect_check(struct target *target, uint16_t *protected_);
 
 /**
  * Writes the flash security words with a specific value. The chip's security will be

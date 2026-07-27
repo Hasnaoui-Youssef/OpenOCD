@@ -465,7 +465,7 @@ struct target *get_current_target(struct command_context *cmd_ctx)
 
 	if (!target) {
 		LOG_ERROR("BUG: current_target out of bounds");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	return target;
@@ -3640,7 +3640,7 @@ static int target_fill_mem(struct target *target,
 			target_buffer_set_u8(target, target_buf + i * data_size, b);
 			break;
 		default:
-			exit(-1);
+			openocd_exit(-1);
 		}
 	}
 

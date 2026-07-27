@@ -167,7 +167,7 @@ static tap_state_t xsvf_to_tap(int xsvf_state)
 			break;
 		default:
 			LOG_ERROR("UNKNOWN XSVF STATE 0x%02X", xsvf_state);
-			exit(1);
+			openocd_exit(1);
 	}
 
 	return ret;

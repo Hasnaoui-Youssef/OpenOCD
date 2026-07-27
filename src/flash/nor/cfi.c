@@ -110,7 +110,7 @@ uint32_t cfi_flash_address(struct flash_bank *bank, int sector, uint32_t offset)
 	else {
 		if (!bank->sectors) {
 			LOG_ERROR("BUG: sector list not yet built");
-			exit(-1);
+			openocd_exit(-1);
 		}
 		return bank->base + bank->sectors[sector].offset + offset * bank->bus_width;
 	}

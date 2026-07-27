@@ -801,7 +801,7 @@ static void openjtag_execute_command(struct jtag_command *cmd)
 		/* jlink_execute_pathmove(cmd); break; */
 	default:
 		LOG_ERROR("BUG: unknown Open JTAG command type encountered");
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 

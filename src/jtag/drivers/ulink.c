@@ -1399,7 +1399,7 @@ static void ulink_set_end_state(tap_state_t endstate)
 		tap_set_end_state(endstate);
 	else {
 		LOG_ERROR("BUG: %s is not a valid end state", tap_state_name(endstate));
-		exit(EXIT_FAILURE);
+		openocd_exit(EXIT_FAILURE);
 	}
 }
 

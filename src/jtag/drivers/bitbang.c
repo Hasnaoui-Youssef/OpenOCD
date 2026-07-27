@@ -127,7 +127,7 @@ static int bitbang_path_move(struct pathmove_command *cmd)
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(cmd->path[state_count]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		if (bitbang_interface->write(0, tms, 0) != ERROR_OK)
@@ -303,7 +303,7 @@ int bitbang_execute_queue(struct jtag_command *cmd_queue)
 
 	if (!bitbang_interface) {
 		LOG_ERROR("BUG: Bitbang interface called, but not yet initialized");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	/* return ERROR_OK, unless a jtag_read_buffer returns a failed check
@@ -375,7 +375,7 @@ int bitbang_execute_queue(struct jtag_command *cmd_queue)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown JTAG command type encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 		cmd = cmd->next;
 	}

@@ -134,7 +134,7 @@ static int usbprog_execute_queue(struct jtag_command *cmd_queue)
 			break;
 		default:
 			LOG_ERROR("BUG: unknown JTAG command type encountered");
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		cmd = cmd->next;
@@ -174,7 +174,7 @@ static void usbprog_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -211,7 +211,7 @@ static void usbprog_path_move(struct pathmove_command *cmd)
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(cmd->path[state_count]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_set_state(cmd->path[state_count]);
@@ -287,7 +287,7 @@ static void usbprog_scan(bool ir_scan, enum scan_type type, uint8_t *buffer, int
 			break;
 		default:
 			LOG_ERROR("unknown scan type: %i", type);
-			exit(-1);
+			openocd_exit(-1);
 	}
 	f(usbprog_jtag_handle, (char *)buffer, scan_size);
 

@@ -332,13 +332,13 @@ int parse_cmdline_args(struct command_context *cmd_ctx, int argc, char *argv[])
 		LOG_OUTPUT("             | -d<n>\tset debug level to <level>\n");
 		LOG_OUTPUT("--log_output | -l\tredirect log output to file <name>\n");
 		LOG_OUTPUT("--command    | -c\trun <command>\n");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	if (version_flag) {
 		/* Nothing to do, version gets printed automatically. */
 		/* It is not an error to request the VERSION number. */
-		exit(0);
+		openocd_exit(0);
 	}
 
 	/* dump full command line */

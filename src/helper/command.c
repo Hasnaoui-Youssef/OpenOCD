@@ -592,7 +592,7 @@ int command_run_line(struct command_context *context, char *line)
 		retval = ERROR_OK;
 	} else if (retcode == JIM_EXIT) {
 		/* ignore.
-		 * exit(Jim_GetExitCode(interp)); */
+		 * openocd_exit(Jim_GetExitCode(interp)); */
 	} else if (retcode == ERROR_COMMAND_CLOSE_CONNECTION) {
 		return retcode;
 	} else {
@@ -1234,7 +1234,7 @@ struct command_context *command_init(const char *startup_tcl, Jim_Interp *interp
 		LOG_ERROR("Failed to run startup.tcl (embedded into OpenOCD)");
 		Jim_MakeErrorMessage(interp);
 		LOG_USER_N("%s", Jim_GetString(Jim_GetResult(interp), NULL));
-		exit(-1);
+		openocd_exit(-1);
 	}
 	Jim_DeleteAssocData(interp, "context");
 

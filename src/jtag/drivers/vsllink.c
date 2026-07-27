@@ -185,7 +185,7 @@ static int vsllink_execute_queue(struct jtag_command *cmd_queue)
 							"in non-stable state \"%s\"",
 							tap_state_name(tap_get_state())
 					);
-					exit(-1);
+					openocd_exit(-1);
 				}
 				vsllink_stableclocks(cmd->cmd.stableclocks->num_cycles, scan_size);
 				break;
@@ -200,7 +200,7 @@ static int vsllink_execute_queue(struct jtag_command *cmd_queue)
 				default:
 					LOG_ERROR("BUG: unknown JTAG command type "
 							"encountered: %d", cmd->type);
-					exit(-1);
+					openocd_exit(-1);
 		}
 		cmd = cmd->next;
 	}
@@ -352,7 +352,7 @@ static void vsllink_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -382,7 +382,7 @@ static void vsllink_path_move(int num_states, tap_state_t *path)
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(path[i]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_set_state(path[i]);

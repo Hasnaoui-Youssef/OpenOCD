@@ -214,6 +214,16 @@ int tmc_init_all(void);
 
 int tmc_cleanup_all(void);
 
+struct tmc_object *tmc_find_by_name(const char *name);
+void tmc_for_each(void (*fn)(struct tmc_object *obj, void *arg), void *arg);
+
+int tmc_open_output(struct tmc_object *obj);
+void tmc_close_output(struct tmc_object *obj);
+int tmc_extract_data(struct tmc_object *obj);
+int tmc_stage_config(struct tmc_object *obj, struct jim_getopt_info *goi);
+int tmc_validate_config(struct tmc_object *obj);
+int tmc_commit_config(struct tmc_object *obj, bool override);
+
 extern const struct command_registration tmc_command_handlers[];
 
 #endif /* OPENOCD_TARGET_ARM_CORESIGHT_TMC_H */

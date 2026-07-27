@@ -1585,7 +1585,7 @@ static void xds110_flush(void)
 				default:
 					LOG_ERROR("BUG: unknown JTAG command type 0x%x encountered",
 						command);
-					exit(-1);
+					openocd_exit(-1);
 					break;
 			}
 		}
@@ -1696,7 +1696,7 @@ static void xds110_execute_pathmove(struct jtag_command *cmd)
 		LOG_ERROR("XDS110: the firmware does not support pathmove command");
 		LOG_ERROR(OCD_FIRMWARE_UPGRADE);
 		/* If pathmove is required, then debug is not possible */
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	free((void *)path);
@@ -1736,7 +1736,7 @@ static void xds110_queue_scan(struct jtag_command *cmd)
 		LOG_ERROR("BUG: JTAG scan request is too large to handle (%" PRIu32 " bits)",
 			total_bits);
 		/* Failing to run this scan mucks up debug on this target */
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	if (cmd->cmd.scan->ir_scan)
@@ -1836,7 +1836,7 @@ static void xds110_execute_command(struct jtag_command *cmd)
 		default:
 			LOG_ERROR("BUG: unknown JTAG command type 0x%x encountered",
 				cmd->type);
-			exit(-1);
+			openocd_exit(-1);
 	}
 }
 

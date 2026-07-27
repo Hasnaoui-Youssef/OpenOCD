@@ -102,7 +102,7 @@ static int tmc_dap_run(struct tmc_object *obj) {
   return dap_run(obj->spot.dap);
 }
 
-static int tmc_commit_config(struct tmc_object *obj, bool override) {
+int tmc_commit_config(struct tmc_object *obj, bool override) {
     int r;
     if (override || obj->pending_config.mode_set) {
         r = tmc_queue_write32(obj, TMC_MODE, obj->mode);
@@ -140,7 +140,7 @@ static int tmc_commit_config(struct tmc_object *obj, bool override) {
     }
     return tmc_dap_run(obj);
 }
-static int tmc_validate_config(struct tmc_object* obj) {
+int tmc_validate_config(struct tmc_object* obj) {
     if(obj->config_type != TMC_CONFIG_ETR &&
             ( obj->pending_config.axi_other_set ||
               obj->pending_config.etr_addr_set ||
@@ -238,7 +238,7 @@ static const struct service_driver tmc_service_driver = {
     .keep_client_alive_handler = NULL,
 };
 
-static int tmc_open_output(struct tmc_object *obj)
+int tmc_open_output(struct tmc_object *obj)
 {
     int r;
 
@@ -284,7 +284,7 @@ static int tmc_open_output(struct tmc_object *obj)
  * synchronously calls back into tmc_service_connection_closed() for every
  * attached client, which dereferences obj.
  */
-static void tmc_close_output(struct tmc_object *obj)
+void tmc_close_output(struct tmc_object *obj)
 {
     if (obj->file) {
         fclose(obj->file);
@@ -378,7 +378,7 @@ static int tmc_output_write(struct tmc_object *obj, const uint8_t *buf, size_t s
  * performance and limit communication with the device if the TMC is still running
  * as we are using an atomic operation over and over again to check for the status
 */
-static int tmc_extract_data(struct tmc_object* obj)
+int tmc_extract_data(struct tmc_object* obj)
 {
     int r;
     switch(obj->mode) {
@@ -743,7 +743,7 @@ static const struct jim_nvp nvp_tmc_mode[] = {
     {.name = NULL, .value = -1},
 };
 
-static int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi) {
+int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi) {
   Jim_Interp *interp = goi->interp;
   bool config_spot = false;
   int e;
@@ -1159,6 +1159,22 @@ int tmc_init_all(void) {
     }
   }
   return retval;
+}
+
+void tmc_for_each(void (*fn)(struct tmc_object *obj, void *arg), void *arg) {
+  struct tmc_object *obj;
+
+  list_for_each_entry(obj, &all_tmc, lh) fn(obj, arg);
+}
+
+struct tmc_object *tmc_find_by_name(const char *name) {
+  struct tmc_object *obj;
+
+  list_for_each_entry(obj, &all_tmc, lh) {
+    if (!strcmp(name, obj->name))
+      return obj;
+  }
+  return NULL;
 }
 
 int tmc_cleanup_all(void) {

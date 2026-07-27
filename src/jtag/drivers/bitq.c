@@ -80,7 +80,7 @@ static void bitq_end_state(tap_state_t state)
 {
 	if (!tap_is_state_stable(state)) {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 	tap_set_end_state(state);
 }
@@ -92,7 +92,7 @@ static void bitq_state_move(tap_state_t new_state)
 
 	if (!tap_is_state_stable(tap_get_state()) || !tap_is_state_stable(new_state)) {
 		LOG_ERROR("TAP move from or to unstable state");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	tms_scan = tap_get_tms_path(tap_get_state(), new_state);
@@ -118,7 +118,7 @@ static void bitq_path_move(struct pathmove_command *cmd)
 		else {
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition", tap_state_name(
 							 tap_get_state()), tap_state_name(cmd->path[i]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_set_state(cmd->path[i]);
@@ -261,7 +261,7 @@ int bitq_execute_queue(struct jtag_command *cmd_queue)
 
 		default:
 			LOG_ERROR("BUG: unknown JTAG command type encountered");
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		cmd = cmd->next;

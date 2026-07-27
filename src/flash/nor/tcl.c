@@ -606,7 +606,7 @@ COMMAND_HANDLER(handle_flash_fill_command)
 			break;
 		default:
 			LOG_ERROR("BUG: can't happen");
-			exit(-1);
+			openocd_exit(-1);
 	}
 
 	if (padding_at_end) {

@@ -34,7 +34,7 @@ int gdb_get_actual_connections(void);
 
 static inline struct target *get_target_from_connection(struct connection *connection)
 {
-	struct gdb_service *gdb_service = connection->service->priv;
+	struct gdb_service *gdb_service = (struct gdb_service *)connection->service->priv;
 	return gdb_service->target;
 }
 

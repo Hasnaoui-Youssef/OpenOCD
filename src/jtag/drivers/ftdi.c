@@ -305,7 +305,7 @@ static void ftdi_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %s is not a stable end state", tap_state_name(state));
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -401,7 +401,7 @@ static void ftdi_execute_pathmove(struct jtag_command *cmd)
 				"TAP state transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(path[state_count]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_set_state(path[state_count]);

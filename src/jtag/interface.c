@@ -88,7 +88,7 @@ int tap_move_ndx(tap_state_t astate)
 		default:
 			LOG_ERROR("FATAL: unstable state \"%s\" in tap_move_ndx()",
 					tap_state_name(astate));
-			exit(1);
+			openocd_exit(1);
 	}
 
 	return ndx;
@@ -268,7 +268,7 @@ tap_state_t tap_state_transition(tap_state_t cur_state, bool tms)
 				break;
 			default:
 				LOG_ERROR("fatal: invalid argument cur_state=%d", cur_state);
-				exit(1);
+				openocd_exit(1);
 				break;
 		}
 	} else {
@@ -305,7 +305,7 @@ tap_state_t tap_state_transition(tap_state_t cur_state, bool tms)
 				break;
 			default:
 				LOG_ERROR("fatal: invalid argument cur_state=%d", cur_state);
-				exit(1);
+				openocd_exit(1);
 				break;
 		}
 	}

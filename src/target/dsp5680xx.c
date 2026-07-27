@@ -1569,12 +1569,12 @@ static int dsp5680xx_soft_reset_halt(struct target *target)
 	return retval;
 }
 
-int dsp5680xx_f_protect_check(struct target *target, uint16_t *protected)
+int dsp5680xx_f_protect_check(struct target *target, uint16_t *protected_)
 {
 	int retval;
 
 	check_halt_and_debug(target);
-	if (!protected) {
+	if (!protected_) {
 		const char *msg = "NULL pointer not valid.";
 
 		err_check(ERROR_FAIL,
@@ -1582,7 +1582,7 @@ int dsp5680xx_f_protect_check(struct target *target, uint16_t *protected)
 	}
 	retval =
 		dsp5680xx_read_16_single(target, HFM_BASE_ADDR | HFM_PROT,
-					 (uint8_t *) protected, 0);
+					 (uint8_t *) protected_, 0);
 	err_check_propagate(retval);
 	return retval;
 }

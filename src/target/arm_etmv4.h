@@ -223,4 +223,25 @@ int etmv4_init_all(void);
 
 int etmv4_cleanup_all(void);
 
+/* struct etmv4_object stays private to arm_etmv4.c; callers outside this
+ * file only ever hold the pointer, resolved by name below. */
+struct etmv4_object;
+
+struct etmv4_object *etmv4_find_by_name(const char *name);
+void etmv4_for_each(void (*fn)(struct etmv4_object *obj, void *arg), void *arg);
+
+int etmv4_instance_init(struct etmv4_object *obj);
+
+const char *etmv4_object_name(const struct etmv4_object *obj);
+bool etmv4_object_initialised(const struct etmv4_object *obj);
+bool etmv4_object_enabled(const struct etmv4_object *obj);
+bool etmv4_object_trace_requested(const struct etmv4_object *obj);
+uint64_t etmv4_object_ap_num(const struct etmv4_object *obj);
+uint32_t etmv4_object_base(const struct etmv4_object *obj);
+uint32_t etmv4_object_traceid(const struct etmv4_object *obj);
+
+/* Same flag write etmv4_enable_handler/etmv4_disable_handler do; the actual
+ * register programming happens later, off TARGET_EVENT_HALTED. */
+void etmv4_object_set_trace_requested(struct etmv4_object *obj, bool requested);
+
 #endif /* OPENOCD_TARGET_ARM_ETMV4_H */

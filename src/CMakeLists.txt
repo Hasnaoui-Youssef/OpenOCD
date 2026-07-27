@@ -23,23 +23,17 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND}
         "-DINPUTS=${_startup_tcl_srcs}"
         -DOUTPUT=${_startup_tcl_inc}
-        -P "${CMAKE_SOURCE_DIR}/cmake/BinToChar.cmake"
-    DEPENDS ${_startup_tcl_srcs} "${CMAKE_SOURCE_DIR}/cmake/BinToChar.cmake"
+        -P "${OPENOCD_ROOT_DIR}/cmake/BinToChar.cmake"
+    DEPENDS ${_startup_tcl_srcs} "${OPENOCD_ROOT_DIR}/cmake/BinToChar.cmake"
     COMMENT "Generating startup_tcl.inc"
     VERBATIM
 )
+# openocd.c is not part of this library (no entry point is built here); this
+# target keeps startup_tcl.inc generated for whoever provides one instead.
+add_custom_target(openocd_startup_tcl ALL DEPENDS "${_startup_tcl_inc}")
 
 openocd_add_object_library(openocd_core
-    openocd.c
     hello.c
-)
-set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/openocd.c"
-    PROPERTIES OBJECT_DEPENDS "${_startup_tcl_inc}"
-)
-target_compile_definitions(openocd_core PRIVATE
-    "RELSTR=\"${OPENOCD_RELSTR}\""
-    "GITVERSION=\"${OPENOCD_GITVERSION}\""
-    "PKGBLDDATE=\"${OPENOCD_PKGBLDDATE}\""
 )
 
 get_property(_openocd_object_libs GLOBAL PROPERTY OPENOCD_OBJECT_LIBS)
@@ -79,6 +73,5 @@ if(WIN32)
     target_link_libraries(openocd PUBLIC ws2_32)
 endif()
 
-add_executable(openocd-bin main.c)
-set_target_properties(openocd-bin PROPERTIES OUTPUT_NAME openocd)
-target_link_libraries(openocd-bin PRIVATE openocd)
+# main.c/openocd.c stay in the tree but are not built: this library has no
+# entry point, the provider (engine/modules/providers/openocd_provider) is one.

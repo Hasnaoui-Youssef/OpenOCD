@@ -613,7 +613,7 @@ static int etmv4_target_callback_event_handler(struct target *target,
     }
 }
 
-static int etmv4_instance_init(struct etmv4_object *obj)
+int etmv4_instance_init(struct etmv4_object *obj)
 {
     int retval = etmv4_unlock(obj);
     if (retval != ERROR_OK) {
@@ -1101,6 +1101,64 @@ int etmv4_init_all(void)
         }
     }
     return retval;
+}
+
+void etmv4_for_each(void (*fn)(struct etmv4_object *obj, void *arg), void *arg)
+{
+    struct etmv4_object *obj;
+
+    list_for_each_entry(obj, &all_etmv4, lh) fn(obj, arg);
+}
+
+struct etmv4_object *etmv4_find_by_name(const char *name)
+{
+    struct etmv4_object *obj;
+
+    list_for_each_entry(obj, &all_etmv4, lh) {
+        if (!strcmp(name, obj->name))
+            return obj;
+    }
+    return NULL;
+}
+
+const char *etmv4_object_name(const struct etmv4_object *obj)
+{
+    return obj->name;
+}
+
+bool etmv4_object_initialised(const struct etmv4_object *obj)
+{
+    return obj->initialised;
+}
+
+bool etmv4_object_enabled(const struct etmv4_object *obj)
+{
+    return obj->enabled;
+}
+
+bool etmv4_object_trace_requested(const struct etmv4_object *obj)
+{
+    return obj->trace_requested;
+}
+
+uint64_t etmv4_object_ap_num(const struct etmv4_object *obj)
+{
+    return obj->spot.ap_num;
+}
+
+uint32_t etmv4_object_base(const struct etmv4_object *obj)
+{
+    return obj->spot.base;
+}
+
+uint32_t etmv4_object_traceid(const struct etmv4_object *obj)
+{
+    return obj->traceid;
+}
+
+void etmv4_object_set_trace_requested(struct etmv4_object *obj, bool requested)
+{
+    obj->trace_requested = requested;
 }
 
 int etmv4_cleanup_all(void)

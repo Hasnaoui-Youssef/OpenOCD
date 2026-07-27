@@ -957,7 +957,7 @@ static int xscale_debug_entry(struct target *target)
 		case 0x7:	/* Reserved (may flag Hot-Debug support) */
 		default:
 			LOG_ERROR("Method of Entry is 'Reserved'");
-			exit(-1);
+			openocd_exit(-1);
 			break;
 	}
 
@@ -1047,7 +1047,7 @@ static int xscale_enable_single_step(struct target *target, uint32_t next_pc)
 		else {
 			LOG_ERROR(
 				"BUG: xscale->ibcr0_used is set, but no breakpoint with that address found");
-			exit(-1);
+			openocd_exit(-1);
 		}
 	}
 
@@ -1927,7 +1927,7 @@ static int xscale_write_memory(struct target *target, target_addr_t address,
 				break;
 			default:
 				LOG_ERROR("should never get here");
-				exit(-1);
+				openocd_exit(-1);
 		}
 	}
 #endif
@@ -2620,7 +2620,7 @@ static int xscale_read_instruction(struct target *target, uint32_t pc,
 		thumb_evaluate_opcode(opcode, pc, instruction);
 	} else {
 		LOG_ERROR("BUG: unknown core state encountered");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	return ERROR_OK;

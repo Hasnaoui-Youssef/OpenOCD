@@ -12,7 +12,12 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build Type" FORCE)
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# CMAKE_SOURCE_DIR would resolve to the outer engine's root once this
+# project is add_subdirectory()'d rather than built standalone; capture our
+# own root here instead, since CMAKE_CURRENT_SOURCE_DIR changes per file.
+set(OPENOCD_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+list(APPEND CMAKE_MODULE_PATH "${OPENOCD_ROOT_DIR}/cmake")
 
 # Order matters
 include(OpenOCDUtils)
@@ -29,6 +34,15 @@ configure_file(
     @ONLY
 )
 
+# openocd.c is not built into this library (no entry point here); it was the
+# only consumer of RELSTR/GITVERSION/PKGBLDDATE as compile definitions, so
+# whoever provides an entry point instead gets them as a header.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/openocd_version.h.in"
+    "${CMAKE_BINARY_DIR}/src/openocd_version.h"
+    @ONLY
+)
+
 add_library(openocd_config INTERFACE)
 target_include_directories(openocd_config INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -42,6 +56,9 @@ target_compile_definitions(openocd_config INTERFACE
 if(MINGW)
     target_compile_definitions(openocd_config INTERFACE __USE_MINGW_ANSI_STDIO)
 endif()
+target_compile_options(openocd_config INTERFACE
+    "-include${CMAKE_CURRENT_SOURCE_DIR}/cmake/openocd_exit.h"
+)
 
 include(jimtcl)
 if(OPENOCD_ENABLE_JLINK AND OPENOCD_INTERNAL_LIBJAYLINK)

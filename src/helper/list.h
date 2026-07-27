@@ -90,29 +90,29 @@ list_del(struct list_head *entry)
 }
 
 static inline void
-list_replace(struct list_head *old, struct list_head *new)
+list_replace(struct list_head *old, struct list_head *new_)
 {
-	new->next = old->next;
-	new->next->prev = new;
-	new->prev = old->prev;
-	new->prev->next = new;
+	new_->next = old->next;
+	new_->next->prev = new_;
+	new_->prev = old->prev;
+	new_->prev->next = new_;
 }
 
 static inline void
-list_replace_init(struct list_head *old, struct list_head *new)
+list_replace_init(struct list_head *old, struct list_head *new_)
 {
-	list_replace(old, new);
+	list_replace(old, new_);
 	INIT_LIST_HEAD(old);
 }
 
 static inline void
-linux_list_add(struct list_head *new, struct list_head *prev,
+linux_list_add(struct list_head *new_, struct list_head *prev,
 	struct list_head *next)
 {
-	next->prev = new;
-	new->next = next;
-	new->prev = prev;
-	prev->next = new;
+	next->prev = new_;
+	new_->next = next;
+	new_->prev = prev;
+	prev->next = new_;
 }
 
 static inline void
@@ -134,13 +134,13 @@ list_del_init(struct list_head *entry)
 	(!list_empty(ptr) ? list_first_entry(ptr, type, member) : NULL)
 
 #define	list_next_entry(ptr, member)					\
-	list_entry(((ptr)->member.next), typeof(*(ptr)), member)
+	list_entry(((ptr)->member.next), __typeof__(*(ptr)), member)
 
 #define	list_safe_reset_next(ptr, n, member) \
 	(n) = list_next_entry(ptr, member)
 
 #define	list_prev_entry(ptr, member)					\
-	list_entry(((ptr)->member.prev), typeof(*(ptr)), member)
+	list_entry(((ptr)->member.prev), __typeof__(*(ptr)), member)
 
 #define	list_for_each(p, head)						\
 	for (p = (head)->next; p != (head); p = (p)->next)
@@ -149,39 +149,39 @@ list_del_init(struct list_head *entry)
 	for (p = (head)->next, n = (p)->next; p != (head); p = n, n = (p)->next)
 
 #define list_for_each_entry(p, h, field)				\
-	for (p = list_entry((h)->next, typeof(*p), field); &(p)->field != (h); \
-	    p = list_entry((p)->field.next, typeof(*p), field))
+	for (p = list_entry((h)->next, __typeof__(*p), field); &(p)->field != (h); \
+	    p = list_entry((p)->field.next, __typeof__(*p), field))
 
 #define list_for_each_entry_safe(p, n, h, field)			\
-	for (p = list_entry((h)->next, typeof(*p), field),		\
-	    n = list_entry((p)->field.next, typeof(*p), field); &(p)->field != (h);\
-	    p = n, n = list_entry(n->field.next, typeof(*n), field))
+	for (p = list_entry((h)->next, __typeof__(*p), field),		\
+	    n = list_entry((p)->field.next, __typeof__(*p), field); &(p)->field != (h);\
+	    p = n, n = list_entry(n->field.next, __typeof__(*n), field))
 
 #define	list_for_each_entry_from(p, h, field) \
 	for ( ; &(p)->field != (h); \
-	    p = list_entry((p)->field.next, typeof(*p), field))
+	    p = list_entry((p)->field.next, __typeof__(*p), field))
 
 #define	list_for_each_entry_continue(p, h, field)			\
 	for (p = list_next_entry((p), field); &(p)->field != (h);	\
 	    p = list_next_entry((p), field))
 
 #define	list_for_each_entry_safe_from(pos, n, head, member)			\
-	for (n = list_entry((pos)->member.next, typeof(*pos), member);		\
+	for (n = list_entry((pos)->member.next, __typeof__(*pos), member);		\
 	     &(pos)->member != (head);						\
-	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
+	     pos = n, n = list_entry(n->member.next, __typeof__(*n), member))
 
 #define	list_for_each_entry_reverse(p, h, field)			\
-	for (p = list_entry((h)->prev, typeof(*p), field); &(p)->field != (h); \
-	    p = list_entry((p)->field.prev, typeof(*p), field))
+	for (p = list_entry((h)->prev, __typeof__(*p), field); &(p)->field != (h); \
+	    p = list_entry((p)->field.prev, __typeof__(*p), field))
 
 #define	list_for_each_entry_safe_reverse(p, n, h, field)		\
-	for (p = list_entry((h)->prev, typeof(*p), field),		\
-	    n = list_entry((p)->field.prev, typeof(*p), field); &(p)->field != (h); \
-	    p = n, n = list_entry(n->field.prev, typeof(*n), field))
+	for (p = list_entry((h)->prev, __typeof__(*p), field),		\
+	    n = list_entry((p)->field.prev, __typeof__(*p), field); &(p)->field != (h); \
+	    p = n, n = list_entry(n->field.prev, __typeof__(*n), field))
 
 #define	list_for_each_entry_continue_reverse(p, h, field) \
-	for (p = list_entry((p)->field.prev, typeof(*p), field); &(p)->field != (h); \
-	    p = list_entry((p)->field.prev, typeof(*p), field))
+	for (p = list_entry((p)->field.prev, __typeof__(*p), field); &(p)->field != (h); \
+	    p = list_entry((p)->field.prev, __typeof__(*p), field))
 
 #define	list_for_each_prev(p, h) for (p = (h)->prev; p != (h); p = (p)->prev)
 
@@ -190,15 +190,15 @@ list_del_init(struct list_head *entry)
 	     p = list_prev_entry(p, field))
 
 static inline void
-list_add(struct list_head *new, struct list_head *head)
+list_add(struct list_head *new_, struct list_head *head)
 {
-	linux_list_add(new, head, head->next);
+	linux_list_add(new_, head, head->next);
 }
 
 static inline void
-list_add_tail(struct list_head *new, struct list_head *head)
+list_add_tail(struct list_head *new_, struct list_head *head)
 {
-	linux_list_add(new, head->prev, head);
+	linux_list_add(new_, head->prev, head);
 }
 
 static inline void
@@ -353,9 +353,9 @@ list_count_nodes(const struct list_head *list)
  * @param field  the name of the list_head within the struct.
  */
 #define list_for_each_entry_direction(is_fwd, p, h, field)					\
-	for (p = list_entry(is_fwd ? (h)->next : (h)->prev, typeof(*p), field);	\
+	for (p = list_entry(is_fwd ? (h)->next : (h)->prev, __typeof__(*p), field);	\
 		&(p)->field != (h);													\
-		p = list_entry(is_fwd ? (p)->field.next : (p)->field.prev, typeof(*p), field))
+		p = list_entry(is_fwd ? (p)->field.next : (p)->field.prev, __typeof__(*p), field))
 
 /**
  * list_rotate_left - rotate the list to the left

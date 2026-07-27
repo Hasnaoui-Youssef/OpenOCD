@@ -215,7 +215,7 @@ static int buspirate_execute_queue(struct jtag_command *cmd_queue)
 				break;
 		default:
 			LOG_ERROR("BUG: unknown JTAG command type encountered");
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		cmd = cmd->next;
@@ -560,7 +560,7 @@ static void buspirate_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -595,7 +595,7 @@ static void buspirate_path_move(int num_states, tap_state_t *path)
 				"TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(path[i]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_set_state(path[i]);
@@ -829,7 +829,7 @@ static void buspirate_tap_append(int tms, int tdi)
 		/* Exit abruptly, like jlink.c does. After a buffer overflow we don't want
 		   to carry on, as data will be corrupt. Another option would be to return
 		   some error code at this point. */
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -910,11 +910,11 @@ static void buspirate_swd_set_speed(int fd, char speed)
 	ret = buspirate_serial_read(fd, tmp, 1);
 	if (ret != 1) {
 		LOG_ERROR("Buspirate did not answer correctly");
-		exit(-1);
+		openocd_exit(-1);
 	}
 	if (tmp[0] != 1) {
 		LOG_ERROR("Buspirate did not reply as expected to the speed change command");
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -933,11 +933,11 @@ static void buspirate_swd_set_mode(int fd, char mode)
 	ret = buspirate_serial_read(fd, tmp, 1);
 	if (ret != 1) {
 		LOG_ERROR("Buspirate did not answer correctly");
-		exit(-1);
+		openocd_exit(-1);
 	}
 	if (tmp[0] != 1) {
 		LOG_ERROR("Buspirate did not reply as expected to the configure command");
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -974,7 +974,7 @@ static void buspirate_swd_set_feature(int fd, char feat, char action)
 		LOG_DEBUG("Buspirate feature %d not supported in SWD mode", feat);
 	} else if (tmp[0] != 1) {
 		LOG_ERROR("Buspirate did not reply as expected to the configure command");
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -1007,18 +1007,18 @@ static void buspirate_bbio_enable(int fd)
 		if (ret != 4) {
 			LOG_ERROR("Buspirate error. Is binary"
 				"/OpenOCD support enabled?");
-			exit(-1);
+			openocd_exit(-1);
 		}
 		if (strncmp((char *)tmp, "BBIO", 4) == 0) {
 			ret = buspirate_serial_read(fd, tmp, 1);
 			if (ret != 1) {
 				LOG_ERROR("Buspirate did not answer correctly! "
 					"Do you have correct firmware?");
-				exit(-1);
+				openocd_exit(-1);
 			}
 			if (tmp[0] != '1') {
 				LOG_ERROR("Unsupported binary protocol");
-				exit(-1);
+				openocd_exit(-1);
 			}
 			if (cmd_sent == 0) {
 				cmd_sent = 1;
@@ -1026,7 +1026,7 @@ static void buspirate_bbio_enable(int fd)
 				ret = buspirate_serial_write(fd, tmp, 1);
 				if (ret != 1) {
 					LOG_ERROR("error reading");
-					exit(-1);
+					openocd_exit(-1);
 				}
 			}
 		} else if (strncmp((char *)tmp, correct_ans, 4) == 0)
@@ -1034,7 +1034,7 @@ static void buspirate_bbio_enable(int fd)
 		else {
 			LOG_ERROR("Buspirate did not answer correctly! "
 				"Do you have correct firmware?");
-			exit(-1);
+			openocd_exit(-1);
 		}
 	}
 
@@ -1072,18 +1072,18 @@ static void buspirate_jtag_set_speed(int fd, char speed)
 	/* here the adapter changes speed, we need follow */
 	if (-1 == buspirate_serial_setspeed(fd, speed, NORMAL_TIMEOUT)) {
 		LOG_ERROR("Error configuring the serial port.");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	buspirate_serial_write(fd, ack, 2);
 	ret = buspirate_serial_read(fd, tmp, 2);
 	if (ret != 2) {
 		LOG_ERROR("Buspirate did not ack speed change");
-		exit(-1);
+		openocd_exit(-1);
 	}
 	if ((tmp[0] != CMD_UART_SPEED) || (tmp[1] != speed)) {
 		LOG_ERROR("Buspirate did not reply as expected to the speed change command");
-		exit(-1);
+		openocd_exit(-1);
 	}
 	LOG_INFO("Buspirate switched to %s mode",
 		(speed == SERIAL_NORMAL) ? "normal" : "FAST");

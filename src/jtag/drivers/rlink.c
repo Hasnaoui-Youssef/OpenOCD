@@ -308,7 +308,7 @@ static int dtc_load_from_buffer(struct libusb_device_handle *hdev_param, const u
 	while (length) {
 		if (length < sizeof(*header)) {
 			LOG_ERROR("Malformed DTC image");
-			exit(1);
+			openocd_exit(1);
 		}
 
 		header = (struct header_s *)buffer;
@@ -317,7 +317,7 @@ static int dtc_load_from_buffer(struct libusb_device_handle *hdev_param, const u
 
 		if (length < (size_t)header->length + 1) {
 			LOG_ERROR("Malformed DTC image");
-			exit(1);
+			openocd_exit(1);
 		}
 
 		switch (header->type) {
@@ -380,7 +380,7 @@ static int dtc_load_from_buffer(struct libusb_device_handle *hdev_param, const u
 
 			default:
 				LOG_ERROR("Invalid DTC image record type: 0x%02x", header->type);
-				exit(1);
+				openocd_exit(1);
 				break;
 		}
 
@@ -649,7 +649,7 @@ static int dtc_queue_run(void)
 			);
 	if (usb_err < 0) {
 		LOG_ERROR("dtc_run_download: %s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	if (dtc_queue.rq_head) {
@@ -848,7 +848,7 @@ static void rlink_end_state(tap_state_t state)
 		tap_set_end_state(state);
 	else {
 		LOG_ERROR("BUG: %i is not a valid end state", state);
-		exit(-1);
+		openocd_exit(-1);
 	}
 }
 
@@ -883,7 +883,7 @@ static void rlink_path_move(struct pathmove_command *cmd)
 			LOG_ERROR("BUG: %s -> %s isn't a valid TAP transition",
 				tap_state_name(tap_get_state()),
 				tap_state_name(cmd->path[state_count]));
-			exit(-1);
+			openocd_exit(-1);
 		}
 
 		tap_state_queue_append(tms);
@@ -935,7 +935,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err < 0) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	usb_err = jtag_libusb_bulk_read(
@@ -946,7 +946,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err != ERROR_OK || transferred < 1) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	if (trst)
@@ -971,7 +971,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err < 0) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	usb_err = jtag_libusb_bulk_read(
@@ -982,7 +982,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err != ERROR_OK || transferred < 1) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	if (srst)
@@ -1002,7 +1002,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err < 0) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 
 	usb_err = jtag_libusb_bulk_read(
@@ -1013,7 +1013,7 @@ static void rlink_reset(int trst, int srst)
 			);
 	if (usb_err != ERROR_OK || transferred < 1) {
 		LOG_ERROR("%s", libusb_error_name(usb_err));
-		exit(1);
+		openocd_exit(1);
 	}
 }
 
@@ -1034,7 +1034,7 @@ static int rlink_scan(struct jtag_command *cmd, enum scan_type type,
 
 	if (scan_size < 1) {
 		LOG_ERROR("scan_size cannot be less than 1 bit");
-		exit(1);
+		openocd_exit(1);
 	}
 
 	ir_scan = cmd->cmd.scan->ir_scan;
@@ -1138,7 +1138,7 @@ static int rlink_scan(struct jtag_command *cmd, enum scan_type type,
 			if (!dtc_queue_enqueue_reply(type, buffer, scan_size, tdi_bit_offset,
 					chunk_bits, cmd)) {
 				LOG_ERROR("enqueuing DTC reply entry: %s", strerror(errno));
-				exit(1);
+				openocd_exit(1);
 			}
 			dtc_queue.reply_index += (chunk_bits + 7) / 8;
 
@@ -1195,7 +1195,7 @@ static int rlink_scan(struct jtag_command *cmd, enum scan_type type,
 		if (!dtc_queue_enqueue_reply(type, buffer, scan_size, tdi_bit_offset,
 				extra_bits, cmd)) {
 			LOG_ERROR("enqueuing DTC reply entry: %s", strerror(errno));
-			exit(1);
+			openocd_exit(1);
 		}
 
 		dtc_queue.reply_index++;
@@ -1244,7 +1244,7 @@ static int rlink_scan(struct jtag_command *cmd, enum scan_type type,
 		if (!dtc_queue_enqueue_reply(type, buffer, scan_size, tdi_bit_offset,
 				1, cmd)) {
 			LOG_ERROR("enqueuing DTC reply entry: %s", strerror(errno));
-			exit(1);
+			openocd_exit(1);
 		}
 
 		dtc_queue.reply_index++;
@@ -1345,7 +1345,7 @@ static int rlink_execute_queue(struct jtag_command *cmd_queue)
 				break;
 			default:
 				LOG_ERROR("BUG: unknown JTAG command type encountered");
-				exit(-1);
+				openocd_exit(-1);
 		}
 		cmd = cmd->next;
 	}
@@ -1387,13 +1387,13 @@ static int rlink_speed(int speed)
 				LOG_ERROR(
 					"An error occurred while trying to load DTC code for speed \"%d\".",
 					speed);
-				exit(1);
+				openocd_exit(1);
 			}
 
 			int ret = dtc_start_download();
 			if (ret < 0) {
 				LOG_ERROR("starting DTC: %s", libusb_error_name(ret));
-				exit(1);
+				openocd_exit(1);
 			}
 
 			return ERROR_OK;

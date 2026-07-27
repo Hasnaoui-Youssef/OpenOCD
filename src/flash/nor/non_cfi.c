@@ -544,6 +544,6 @@ void cfi_fixup_non_cfi(struct flash_bank *bank)
 		cfi_info->pri_ext = pri_ext;
 	} else if ((cfi_info->pri_id == 0x1) || (cfi_info->pri_id == 0x3)) {
 		LOG_ERROR("BUG: non-CFI flashes using the Intel commandset are not yet supported");
-		exit(-1);
+		openocd_exit(-1);
 	}
 }

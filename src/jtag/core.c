@@ -1713,7 +1713,7 @@ int jtag_power_dropout(int *dropout)
 		/* TODO: as the jtag interface is not valid all
 		 * we can do at the moment is exit OpenOCD */
 		LOG_ERROR("No Valid JTAG Interface Configured.");
-		exit(-1);
+		openocd_exit(-1);
 	}
 	if (adapter_driver->power_dropout)
 		return adapter_driver->power_dropout(dropout);

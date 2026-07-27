@@ -211,7 +211,7 @@ struct command {
  */
 static inline struct command *jim_to_command(Jim_Interp *interp)
 {
-	return Jim_CmdPrivData(interp);
+	return (struct command *)Jim_CmdPrivData(interp);
 }
 
 /*

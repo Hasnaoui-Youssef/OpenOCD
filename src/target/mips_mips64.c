@@ -244,7 +244,7 @@ static int mips_mips64_set_hwbp(struct target *target, struct breakpoint *bp)
 		LOG_DEBUG("ERROR Can not find free FP Comparator(bpid: %" PRIu32 ")",
 			  bp->unique_id);
 		LOG_WARNING("ERROR Can not find free FP Comparator");
-		exit(-1);
+		openocd_exit(-1);
 	}
 
 	c = &cl[bp_num];
