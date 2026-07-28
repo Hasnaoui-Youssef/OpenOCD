@@ -309,9 +309,6 @@ struct armv7m_algorithm {
 struct reg_cache *armv7m_build_reg_cache(struct target *target);
 void armv7m_free_reg_cache(struct target *target);
 
-enum armv7m_mode armv7m_number_to_mode(int number);
-int armv7m_mode_to_number(enum armv7m_mode mode);
-
 int armv7m_arch_state(struct target *target);
 int armv7m_get_gdb_reg_list(struct target *target,
 		struct reg **reg_list[], int *reg_list_size,

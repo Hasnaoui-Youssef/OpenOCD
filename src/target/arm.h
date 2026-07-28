@@ -260,7 +260,7 @@ struct arm {
 static inline struct arm *target_to_arm(const struct target *target)
 {
 	assert(target);
-	return target->arch_info;
+	return (struct arm*)target->arch_info;
 }
 
 static inline bool is_arm(struct arm *arm)

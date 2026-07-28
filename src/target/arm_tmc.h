@@ -175,6 +175,8 @@ struct tmc_etr_config {
 };
 static_assert(sizeof(struct tmc_etr_config) == 2 * sizeof(uint64_t), "ETR config should be 16 bytes");
 
+typedef void (*capture_callback)(const uint8_t* data, size_t size, bool is_barrier, void* args);
+
 struct tmc_object {
 	struct list_head            lh;
 	char                        *name;
@@ -193,6 +195,10 @@ struct tmc_object {
 	uint32_t                    ram_size_words;
 
     struct tmc_etr_config       etr_config;
+
+    capture_callback callback;
+    void* callback_args;
+
 
     /*
      * Trace output sink. out_filename holds the raw -output string and
@@ -223,6 +229,8 @@ int tmc_extract_data(struct tmc_object *obj);
 int tmc_stage_config(struct tmc_object *obj, struct jim_getopt_info *goi);
 int tmc_validate_config(struct tmc_object *obj);
 int tmc_commit_config(struct tmc_object *obj, bool override);
+void tmc_set_capture_callback(struct tmc_object *obj, capture_callback callback, void* args);
+void tmc_clear_capture_callback(struct tmc_object *obj);
 
 extern const struct command_registration tmc_command_handlers[];
 

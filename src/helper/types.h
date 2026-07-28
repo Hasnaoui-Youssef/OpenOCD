@@ -65,10 +65,16 @@
  *
  * This is a mechanism which is used throughout the Linux kernel.
  */
+/*
 #define container_of(ptr, type, member) ({			\
 	const __typeof__( ((type *)0)->member ) *__mptr = (ptr);	\
 	(type *)( (void *) ( (char *)__mptr - offsetof(type,member) ) );})
-
+*/
+#define container_of(ptr, type, member) ({                      \
+    const __typeof__( ((type *)0)->member ) *__mptr =           \
+        (const __typeof__( ((type *)0)->member ) *)(ptr);       \
+    (type *)( (char *)__mptr - offsetof(type, member) );        \
+})
 
 /**
  * Rounds @c m up to the nearest multiple of @c n using division.

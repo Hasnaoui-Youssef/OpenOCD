@@ -113,6 +113,7 @@ struct etmv4_object {
     union etmv4_trcconfigr configr;     /* TRCCONFIGR */
     union etmv4_trcvictlr victlr;       /* TRCVICTLR */
     uint32_t cc_threshold;              /* TRCCCCTLR; 0 = use TRCIDR3.CCITMIN */
+    uint32_t auth_status;
 
     struct etmv4_idr_reg trcidr[ETMV4_NUM_TRCIDR];  /* raw copy for trace decoders */
     struct etmv4_caps caps;
@@ -319,6 +320,9 @@ static int etmv4_read_capabilities(struct etmv4_object *obj)
         if (retval != ERROR_OK)
             return retval;
     }
+    retval = etmv4_queue_read32(obj, ETMV4_TRCAUTHSTATUS, &obj->auth_status);
+    if (retval != ERROR_OK)
+        return retval;
     retval = etmv4_dap_run(obj);
     if (retval != ERROR_OK) {
         LOG_ERROR("ETMv4 %s: failed to read the TRCIDR registers", obj->name);
@@ -1154,6 +1158,35 @@ uint32_t etmv4_object_base(const struct etmv4_object *obj)
 uint32_t etmv4_object_traceid(const struct etmv4_object *obj)
 {
     return obj->traceid;
+}
+
+uint32_t etmv4_object_trcidr(const struct etmv4_object *obj, uint32_t idx) {
+    if(idx >= ETMV4_NUM_TRCIDR || !obj->initialised) {
+        return UINT32_MAX;
+    }
+    return obj->trcidr[idx].value;
+}
+uint32_t etmv4_object_authstatus(const struct etmv4_object *obj) {
+    if(!obj->initialised) {
+        return UINT32_MAX;
+    }
+    return obj->auth_status;
+}
+
+struct etmv4_decode_regs etmv4_object_decode_regs(const struct etmv4_object *obj) {
+    struct etmv4_decode_regs regs = {0};
+    if(!obj->initialised) {
+        return regs;
+    }
+    uint32_t* trcidr = (uint32_t*) &regs;
+    for(uint32_t i = 0; i < ETMV4_NUM_TRCIDR; i++) {
+        *(trcidr++) = obj->trcidr[i].value;
+    }
+    trcidr = NULL;
+    regs.trcconfigr = obj->configr.word;
+    regs.trctraceidr = obj->traceid;
+    regs.trcauthstatus = obj->auth_status;
+    return regs;
 }
 
 void etmv4_object_set_trace_requested(struct etmv4_object *obj, bool requested)

@@ -340,6 +340,11 @@ static int tmc_output_write(struct tmc_object *obj, const uint8_t *buf, size_t s
 {
     struct tmc_connection *c;
 
+    if (obj->callback) {
+        obj->callback(tmc_fsync_barrier, sizeof(tmc_fsync_barrier), true, obj->callback_args);
+        obj->callback(buf, size, false, obj->callback_args);
+    }
+
     if (!obj->en_capture)
         return ERROR_OK;
 
@@ -685,6 +690,16 @@ static int tmc_instance_init(struct tmc_object *obj) {
   }
   obj->initialised = true;
   return ERROR_OK;
+}
+
+void tmc_set_capture_callback(struct tmc_object *obj, capture_callback callback, void* args) {
+    obj->callback = callback;
+    obj->callback_args = args;
+}
+
+void tmc_clear_capture_callback(struct tmc_object *obj) {
+    obj->callback = NULL;
+    obj->callback_args = NULL;
 }
 
 /****************************************

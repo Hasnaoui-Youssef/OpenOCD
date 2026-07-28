@@ -16,38 +16,39 @@
 /* =========================================================================
  * Trace unit register offsets
  * ========================================================================= */
-#define ETMV4_TRCPRGCTLR        0x004u  /* Programming Control        [RW] */
-#define ETMV4_TRCSTATR          0x00Cu  /* Trace Status               [RO] */
-#define ETMV4_TRCCONFIGR        0x010u  /* Trace Configuration        [RW] */
-#define ETMV4_TRCEVENTCTL0R     0x020u  /* Event Control 0            [RW] */
-#define ETMV4_TRCEVENTCTL1R     0x024u  /* Event Control 1            [RW] */
-#define ETMV4_TRCSTALLCTLR      0x02Cu  /* Stall Control              [RW] */
-#define ETMV4_TRCTSCTLR         0x030u  /* Timestamp Control          [RW] */
-#define ETMV4_TRCSYNCPR         0x034u  /* Synchronization Period     [RW] RO if TRCIDR3.SYNCPR */
-#define ETMV4_TRCCCCTLR         0x038u  /* Cycle Count Control        [RW] */
-#define ETMV4_TRCBBCTLR         0x03Cu  /* Branch Broadcast Control   [RW] */
-#define ETMV4_TRCTRACEIDR       0x040u  /* ATB Trace ID               [RW] */
-#define ETMV4_TRCVICTLR         0x080u  /* ViewInst Main Control      [RW] */
-#define ETMV4_TRCVIIECTLR       0x084u  /* ViewInst Include/Exclude   [RW] */
-#define ETMV4_TRCVISSCTLR       0x088u  /* ViewInst Start/Stop        [RW] */
-#define ETMV4_TRCVIPCSSCTLR     0x08Cu  /* ViewInst Start/Stop PE Comp [RW] */
-#define ETMV4_TRCVDCTLR         0x0A0u  /* ViewData Main Control      [RW] */
+#define ETMV4_TRCPRGCTLR        0x004u  /* Programming Control          [RW] */
+#define ETMV4_TRCSTATR          0x00Cu  /* Trace Status                 [RO] */
+#define ETMV4_TRCCONFIGR        0x010u  /* Trace Configuration          [RW] */
+#define ETMV4_TRCEVENTCTL0R     0x020u  /* Event Control 0              [RW] */
+#define ETMV4_TRCEVENTCTL1R     0x024u  /* Event Control 1              [RW] */
+#define ETMV4_TRCSTALLCTLR      0x02Cu  /* Stall Control                [RW] */
+#define ETMV4_TRCTSCTLR         0x030u  /* Timestamp Control            [RW] */
+#define ETMV4_TRCSYNCPR         0x034u  /* Synchronization Period       [RW*]*/
+#define ETMV4_TRCCCCTLR         0x038u  /* Cycle Count Control          [RW] */
+#define ETMV4_TRCBBCTLR         0x03Cu  /* Branch Broadcast Control     [RW] */
+#define ETMV4_TRCTRACEIDR       0x040u  /* ATB Trace ID                 [RW] */
+#define ETMV4_TRCVICTLR         0x080u  /* ViewInst Main Control        [RW] */
+#define ETMV4_TRCVIIECTLR       0x084u  /* ViewInst Include/Exclude     [RW] */
+#define ETMV4_TRCVISSCTLR       0x088u  /* ViewInst Start/Stop          [RW] */
+#define ETMV4_TRCVIPCSSCTLR     0x08Cu  /* ViewInst Start/Stop PE Comp  [RW] */
+#define ETMV4_TRCVDCTLR         0x0A0u  /* ViewData Main Control        [RW] */
 #define ETMV4_TRCVDSACCTLR      0x0A4u  /* ViewData Include/Exclude SAC [RW] */
 #define ETMV4_TRCVDARCCTLR      0x0A8u  /* ViewData Include/Exclude ARC [RW] */
-#define ETMV4_TRCIDR8           0x180u  /* ID Register 8              [RO] */
-#define ETMV4_TRCIDR9           0x184u  /* ID Register 9              [RO] */
-#define ETMV4_TRCIDR10          0x188u  /* ID Register 10             [RO] */
-#define ETMV4_TRCIDR11          0x18Cu  /* ID Register 11             [RO] */
-#define ETMV4_TRCIDR12          0x190u  /* ID Register 12             [RO] */
-#define ETMV4_TRCIDR13          0x194u  /* ID Register 13             [RO] */
-#define ETMV4_TRCIDR0           0x1E0u  /* ID Register 0              [RO] */
-#define ETMV4_TRCIDR1           0x1E4u  /* ID Register 1              [RO] */
-#define ETMV4_TRCIDR2           0x1E8u  /* ID Register 2              [RO] */
-#define ETMV4_TRCIDR3           0x1ECu  /* ID Register 3              [RO] */
-#define ETMV4_TRCIDR4           0x1F0u  /* ID Register 4              [RO] */
-#define ETMV4_TRCIDR5           0x1F4u  /* ID Register 5              [RO] */
-#define ETMV4_TRCIDR6           0x1F8u  /* ID Register 6              [RO] RES0 */
-#define ETMV4_TRCIDR7           0x1FCu  /* ID Register 7              [RO] RES0 */
+#define ETMV4_TRCIDR8           0x180u  /* ID Register 8                [RO] */
+#define ETMV4_TRCIDR9           0x184u  /* ID Register 9                [RO] */
+#define ETMV4_TRCIDR10          0x188u  /* ID Register 10               [RO] */
+#define ETMV4_TRCIDR11          0x18Cu  /* ID Register 11               [RO] */
+#define ETMV4_TRCIDR12          0x190u  /* ID Register 12               [RO] */
+#define ETMV4_TRCIDR13          0x194u  /* ID Register 13               [RO] */
+#define ETMV4_TRCIDR0           0x1E0u  /* ID Register 0                [RO] */
+#define ETMV4_TRCIDR1           0x1E4u  /* ID Register 1                [RO] */
+#define ETMV4_TRCIDR2           0x1E8u  /* ID Register 2                [RO] */
+#define ETMV4_TRCIDR3           0x1ECu  /* ID Register 3                [RO] */
+#define ETMV4_TRCIDR4           0x1F0u  /* ID Register 4                [RO] */
+#define ETMV4_TRCIDR5           0x1F4u  /* ID Register 5                [RO] */
+#define ETMV4_TRCIDR6           0x1F8u  /* ID Register 6                [RO] */
+#define ETMV4_TRCIDR7           0x1FCu  /* ID Register 7                [RO] */
+#define ETMV4_TRCAUTHSTATUS     0xFB8   /* Authentication Status        [RO] */
 
 #define ETMV4_NUM_TRCIDR        14
 
@@ -96,6 +97,27 @@ union etmv4_trcvictlr {
     };
     uint32_t word;
 };
+
+struct etmv4_decode_regs {
+    uint32_t trcidr0;
+    uint32_t trcidr1;
+    uint32_t trcidr2;
+    uint32_t trcidr3;
+    uint32_t trcidr4;
+    uint32_t trcidr5;
+    uint32_t trcidr6;
+    uint32_t trcidr7;
+    uint32_t trcidr8;
+    uint32_t trcidr9;
+    uint32_t trcidr10;
+    uint32_t trcidr11;
+    uint32_t trcidr12;
+    uint32_t trcidr13;
+    uint32_t trcconfigr;
+    uint32_t trctraceidr;
+    uint32_t trcauthstatus;
+};
+
 
 /* Event selector value: resource selector 1, hardwired to always TRUE */
 #define ETMV4_EVENT_TRUE            0x01u
@@ -239,6 +261,9 @@ bool etmv4_object_trace_requested(const struct etmv4_object *obj);
 uint64_t etmv4_object_ap_num(const struct etmv4_object *obj);
 uint32_t etmv4_object_base(const struct etmv4_object *obj);
 uint32_t etmv4_object_traceid(const struct etmv4_object *obj);
+uint32_t etmv4_object_trcidr(const struct etmv4_object *obj, uint32_t idx);
+uint32_t etmv4_object_authstatus(const struct etmv4_object *obj);
+struct etmv4_decode_regs etmv4_object_decode_regs(const struct etmv4_object *obj);
 
 /* Same flag write etmv4_enable_handler/etmv4_disable_handler do; the actual
  * register programming happens later, off TARGET_EVENT_HALTED. */
