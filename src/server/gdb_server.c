@@ -81,6 +81,9 @@ struct gdb_connection {
 	 * allowing GDB to pick up a fresh set of register values from the target
 	 * without modifying the target state. */
 	bool sync;
+	/* like 'sync', but honoured by continue as well as stepi, and settable
+	 * out-of-band (see TARGET_EVENT_GDB_RESYNC / the gdb_resync command). */
+	bool resync;
 	/* We delay reporting memory write errors until next step/continue or memory
 	 * write. This improves performance of gdb load significantly as the GDB packet
 	 * can be replied immediately and a new GDB packet will be ready without delay
@@ -951,6 +954,23 @@ static void gdb_frontend_halted(struct target *target, struct connection *connec
 	}
 }
 
+static bool gdb_resync_reply(struct connection *connection, struct target *target)
+{
+	struct gdb_connection *gdb_connection = connection->priv;
+
+	if (!gdb_connection->resync)
+		return false;
+
+	gdb_connection->resync = false;
+	if (target->state != TARGET_HALTED)
+		return false;
+
+	gdb_connection->frontend_state = TARGET_HALTED;
+	gdb_signal_reply(target, connection);
+	gdb_connection->output_flag = GDB_OUTPUT_NO;
+	return true;
+}
+
 static int gdb_target_callback_event_handler(struct target *target,
 		enum target_event event, void *priv)
 {
@@ -964,6 +984,11 @@ static int gdb_target_callback_event_handler(struct target *target,
 		case TARGET_EVENT_GDB_HALT:
 			gdb_frontend_halted(target, connection);
 			break;
+		case TARGET_EVENT_GDB_RESYNC: {
+			struct gdb_connection *gdb_connection = connection->priv;
+			gdb_connection->resync = true;
+			break;
+		}
 		case TARGET_EVENT_HALTED:
 			target_call_event_callbacks(target, TARGET_EVENT_GDB_END);
 			break;
@@ -996,6 +1021,7 @@ static int gdb_new_connection(struct connection *connection)
 	gdb_connection->busy = false;
 	gdb_connection->noack_mode = 0;
 	gdb_connection->sync = false;
+	gdb_connection->resync = false;
 	gdb_connection->mem_write_error = false;
 	gdb_connection->attached = true;
 	gdb_connection->extended_protocol = false;
@@ -3009,6 +3035,9 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 
 	/* simple case, a continue packet */
 	if (parse[0] == 'c') {
+		if (gdb_resync_reply(connection, target))
+			return true;
+
 		gdb_running_type = 'c';
 		LOG_DEBUG("target %s continue", target_name(target));
 		gdb_connection->output_flag = GDB_OUTPUT_ALL;
@@ -3036,6 +3065,9 @@ static bool gdb_handle_vcont_packet(struct connection *connection, const char *p
 
 	/* single-step or step-over-breakpoint */
 	if (parse[0] == 's') {
+		if (gdb_resync_reply(connection, target))
+			return true;
+
 		gdb_running_type = 's';
 		bool fake_step = false;
 
@@ -3594,6 +3626,9 @@ static int gdb_input_inner(struct connection *connection)
 				case 'c':
 				case 's':
 				{
+					if (gdb_resync_reply(connection, target))
+						break;
+
 					gdb_thread_packet(connection, packet, packet_size);
 					gdb_con->output_flag = GDB_OUTPUT_ALL;
 
@@ -3957,6 +3992,20 @@ COMMAND_HANDLER(handle_gdb_sync_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(handle_gdb_resync_command)
+{
+	if (CMD_ARGC != 0)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	struct target *target = get_current_target_or_null(CMD_CTX);
+	if (!target) {
+		command_print(CMD, "gdb_resync requires a current target");
+		return ERROR_FAIL;
+	}
+
+	return target_call_event_callbacks(target, TARGET_EVENT_GDB_RESYNC);
+}
+
 /* daemon configuration command gdb_port */
 COMMAND_HANDLER(handle_gdb_port_command)
 {
@@ -4089,6 +4138,14 @@ static const struct command_registration gdb_command_handlers[] = {
 		.help = "next stepi will return immediately allowing "
 			"GDB to fetch register state without affecting "
 			"target state",
+		.usage = ""
+	},
+	{
+		.name = "gdb_resync",
+		.handler = handle_gdb_resync_command,
+		.mode = COMMAND_ANY,
+		.help = "make the next gdb continue or stepi reply immediately with "
+			"the current target state, without resuming",
 		.usage = ""
 	},
 	{

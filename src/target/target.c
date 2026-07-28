@@ -158,6 +158,7 @@ static const char *target_strerror_safe(int err)
 static const struct jim_nvp nvp_target_event[] = {
 
 	{ .value = TARGET_EVENT_GDB_HALT, .name = "gdb-halt" },
+	{ .value = TARGET_EVENT_GDB_RESYNC, .name = "gdb-resync" },
 	{ .value = TARGET_EVENT_HALTED, .name = "halted" },
 	{ .value = TARGET_EVENT_RESUMED, .name = "resumed" },
 	{ .value = TARGET_EVENT_RESUME_START, .name = "resume-start" },

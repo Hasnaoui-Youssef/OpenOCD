@@ -249,6 +249,7 @@ enum target_event {
 	 * This can be useful when e.g. detecting power dropout.
 	 */
 	TARGET_EVENT_GDB_HALT,
+	TARGET_EVENT_GDB_RESYNC,	/* arm the next gdb resume to reply with target state instead of resuming */
 	TARGET_EVENT_HALTED,		/* target entered debug state from normal execution or reset */
 	TARGET_EVENT_RESUMED,		/* target resumed to normal execution */
 	TARGET_EVENT_RESUME_START,
