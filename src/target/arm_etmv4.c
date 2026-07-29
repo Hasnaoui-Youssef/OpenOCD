@@ -604,6 +604,20 @@ static int etmv4_target_callback_event_handler(struct target *target,
             return r;
         obj->enabled = true;
         return ERROR_OK;
+    case TARGET_EVENT_STEP_START:
+        if (!obj->trace_requested || obj->enabled)
+            return ERROR_OK;
+        r = etmv4_validate_config(obj);
+        if (r != ERROR_OK)
+            return r;
+        r = etmv4_commit_config(obj, false);
+        if (r != ERROR_OK)
+            return r;
+        r = etmv4_start_trace_unit(obj);
+        if (r != ERROR_OK)
+            return r;
+        obj->enabled = true;
+        return ERROR_OK;
     case TARGET_EVENT_HALTED:
         if (!obj->enabled)
             return ERROR_OK;
@@ -660,9 +674,8 @@ COMMAND_HANDLER(etmv4_instance_init_handler)
     return etmv4_instance_init(obj);
 }
 
-COMMAND_HANDLER(etmv4_enable_handler)
+int etmv4_enable(struct etmv4_object *obj)
 {
-    struct etmv4_object *obj = CMD_DATA;
     if (!obj->initialised) {
         LOG_ERROR("ETMv4 %s: not initialised, run '%s init' first",
                 obj->name, obj->name);
@@ -677,13 +690,22 @@ COMMAND_HANDLER(etmv4_enable_handler)
  * the core runs. A still-running trace unit is stopped by the next HALTED
  * event and, with the request cleared, is not re-armed afterwards.
  */
-COMMAND_HANDLER(etmv4_disable_handler)
+int etmv4_disable(struct etmv4_object *obj)
 {
-    struct etmv4_object *obj = CMD_DATA;
     if (obj->enabled)
         LOG_DEBUG("ETMv4 %s: tracing stops at the next halt", obj->name);
     obj->trace_requested = false;
     return ERROR_OK;
+}
+
+COMMAND_HANDLER(etmv4_enable_handler)
+{
+    return etmv4_enable(CMD_DATA);
+}
+
+COMMAND_HANDLER(etmv4_disable_handler)
+{
+    return etmv4_disable(CMD_DATA);
 }
 
 enum etmv4_cfg_param {
@@ -1187,11 +1209,6 @@ struct etmv4_decode_regs etmv4_object_decode_regs(const struct etmv4_object *obj
     regs.trctraceidr = obj->traceid;
     regs.trcauthstatus = obj->auth_status;
     return regs;
-}
-
-void etmv4_object_set_trace_requested(struct etmv4_object *obj, bool requested)
-{
-    obj->trace_requested = requested;
 }
 
 int etmv4_cleanup_all(void)

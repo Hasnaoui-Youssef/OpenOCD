@@ -226,6 +226,8 @@ void tmc_for_each(void (*fn)(struct tmc_object *obj, void *arg), void *arg);
 int tmc_open_output(struct tmc_object *obj);
 void tmc_close_output(struct tmc_object *obj);
 int tmc_extract_data(struct tmc_object *obj);
+int tmc_enable(struct tmc_object *obj);
+int tmc_disable(struct tmc_object *obj);
 int tmc_stage_config(struct tmc_object *obj, struct jim_getopt_info *goi);
 int tmc_validate_config(struct tmc_object *obj);
 int tmc_commit_config(struct tmc_object *obj, bool override);

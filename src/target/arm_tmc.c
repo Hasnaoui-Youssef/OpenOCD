@@ -169,7 +169,7 @@ static int tmc_poll_bit(struct tmc_object *obj, uint32_t offset, uint32_t mask,
       return retval;
     if ((val & mask) == expected)
       return ERROR_OK;
-    alive_sleep(1);
+    alive_sleep(10);
   } while (timeval_ms() < deadline);
 
   return ERROR_TIMEOUT_REACHED;
@@ -523,7 +523,7 @@ static int tmc_stop_and_extract(struct tmc_object *obj)
     int r;
     uint32_t ffcr_val, sts_val;
 
-    r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
+    /*r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
     if (r != ERROR_OK) {
         r = tmc_read32(obj, TMC_FFCR, &ffcr_val);
         if (r != ERROR_OK)
@@ -535,7 +535,17 @@ static int tmc_stop_and_extract(struct tmc_object *obj)
         r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
         if (r != ERROR_OK)
             return r;
-    }
+    }*/
+    r = tmc_read32(obj, TMC_FFCR, &ffcr_val);
+    if (r != ERROR_OK)
+        return r;
+    r = tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL);
+    r |= tmc_write32(obj, TMC_FFCR, ffcr_val | TMC_FFCR_STOPONFL | TMC_FFCR_FLUSHMAN);
+    if (r != ERROR_OK)
+        return r;
+    r = tmc_poll_bit(obj, TMC_STS, TMC_STS_TMCREADY, TMC_STS_TMCREADY, TMC_POLL_TIMEOUT_MS);
+    if (r != ERROR_OK)
+            return r;
 
     r = tmc_read32(obj, TMC_STS, &sts_val);
     if (r != ERROR_OK)
@@ -588,6 +598,16 @@ static int tmc_target_callback_event_handler(struct target *target,
         if (obj->state != TMC_RUNNING)
             return ERROR_OK;
         return tmc_stop_and_extract(obj);
+    case TARGET_EVENT_STEP_END:
+        if (!obj->capture_requested || obj->state != TMC_DISABLED)
+            return ERROR_OK;
+        r = tmc_validate_config(obj);
+        if(r != ERROR_OK)
+            return r;
+        r =  tmc_commit_config(obj, false);
+        if(r != ERROR_OK)
+            return r;
+        return tmc_start_capture(obj);
     default:
         return ERROR_OK;
     }
@@ -961,8 +981,7 @@ int tmc_stage_config(struct tmc_object* obj, struct jim_getopt_info *goi) {
   return JIM_OK;
 }
 
-COMMAND_HANDLER(tmc_enable_handler) {
-  struct tmc_object *obj = CMD_DATA;
+int tmc_enable(struct tmc_object *obj) {
   int r;
   if (!obj->initialised)
     return ERROR_FAIL;
@@ -980,9 +999,8 @@ COMMAND_HANDLER(tmc_enable_handler) {
  * tmc_stop_and_extract timed out). This never force-stops a currently
  * Running capture itself.
  */
-COMMAND_HANDLER(tmc_disable_handler)
+int tmc_disable(struct tmc_object *obj)
 {
-    struct tmc_object* obj = CMD_DATA;
     int r = ERROR_OK;
 
     obj->capture_requested = false;
@@ -992,6 +1010,15 @@ COMMAND_HANDLER(tmc_disable_handler)
     /* Drain first, so the last capture still reaches the sink. */
     tmc_close_output(obj);
     return r;
+}
+
+COMMAND_HANDLER(tmc_enable_handler) {
+  return tmc_enable(CMD_DATA);
+}
+
+COMMAND_HANDLER(tmc_disable_handler)
+{
+    return tmc_disable(CMD_DATA);
 }
 
 static int jim_tmc_configure(Jim_Interp *interp, int argc, Jim_Obj *const *argv) {
