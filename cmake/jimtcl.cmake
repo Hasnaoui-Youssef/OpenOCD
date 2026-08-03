@@ -26,8 +26,9 @@ include(CheckCCompilerFlag)
 # --- Headers ---
 foreach(_hdr
     arpa/inet.h crt_externs.h dirent.h dlfcn.h execinfo.h fcntl.h math.h
-    netdb.h netinet/in.h pty.h stdlib.h sys/socket.h sys/stat.h
-    sys/sysinfo.h sys/time.h sys/types.h sys/un.h time.h unistd.h util.h
+    netdb.h netinet/in.h pty.h stdlib.h sys/select.h sys/socket.h sys/stat.h
+    sys/sysinfo.h sys/time.h sys/types.h sys/un.h sys/wait.h termios.h
+    time.h unistd.h util.h
 )
     string(TOUPPER "${_hdr}" _hdr_upper)
     string(REGEX REPLACE "[/.]" "_" _hdr_var "${_hdr_upper}")
@@ -72,6 +73,13 @@ check_c_source_compiles("
     int main(void) { struct flock fl; (void)fl; return 0; }
 " HAVE_STRUCT_FLOCK)
 
+# mkdir takes one argument on Windows, two on POSIX (auto.def:376).
+check_symbol_exists(_fullpath "stdlib.h" HAVE__FULLPATH)
+check_c_source_compiles("
+    #include <sys/stat.h>
+    int main(void) { return mkdir(\"x\"); }
+" HAVE_MKDIR_ONE_ARG)
+
 # --- Compiler feature checks ---
 check_c_compiler_flag(-fno-asynchronous-unwind-tables HAVE_CFLAG_FNO_ASYNCHRONOUS_UNWIND_TABLES)
 check_c_compiler_flag(-fno-unwind-tables HAVE_CFLAG_FNO_UNWIND_TABLES)
@@ -105,6 +113,30 @@ set(JIM_VERSION 82)
 set(JIM_UTF8 OFF)
 set(JIM_INSTALL OFF)
 set(JIM_RANDOMISE_HASH OFF)
+
+# posix/signal/syslog include their POSIX headers unconditionally, so on
+# Windows they are dropped entirely rather than compiled - as autosetup does.
+set(_jim_posix_exts "")
+set(_jim_posix_srcs "")
+if(HAVE_SYS_WAIT_H)
+    set(jim_ext_posix 1)
+    list(APPEND _jim_posix_exts posix)
+    list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-posix.c")
+endif()
+if(HAVE_SIGACTION)
+    set(jim_ext_signal 1)
+    list(APPEND _jim_posix_exts signal)
+    list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-signal.c")
+else()
+    # [exec] calls Jim_SignalId() unguarded; upstream ships this stub for
+    # exactly the case where the signal extension isn't built.
+    list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-nosignal.c")
+endif()
+if(HAVE_SYSLOG)
+    set(jim_ext_syslog 1)
+    list(APPEND _jim_posix_exts syslog)
+    list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-syslog.c")
+endif()
 
 set(_jimtcl_generated_dir "${CMAKE_BINARY_DIR}/jimtcl_generated")
 file(MAKE_DIRECTORY "${_jimtcl_generated_dir}")
@@ -142,7 +174,8 @@ endforeach()
 # JimMakeLoadStaticExts.cmake re-sorts by load priority itself.
 set(_jim_static_exts
     aio array clock eventloop exec file history interp json load namespace
-    pack package posix readdir regexp signal syslog
+    pack package readdir regexp
+    ${_jim_posix_exts}
     glob jsonencode nshelper oo stdlib tclcompat tree
 )
 set(_jim_load_static_exts_c "${_jimtcl_generated_dir}/_load-static-exts.c")
@@ -185,11 +218,9 @@ add_library(jim STATIC
     "${JIMTCL_DIR}/jim-namespace.c"
     "${JIMTCL_DIR}/jim-pack.c"
     "${JIMTCL_DIR}/jim-package.c"
-    "${JIMTCL_DIR}/jim-posix.c"
     "${JIMTCL_DIR}/jim-readdir.c"
     "${JIMTCL_DIR}/jim-regexp.c"
-    "${JIMTCL_DIR}/jim-signal.c"
-    "${JIMTCL_DIR}/jim-syslog.c"
+    ${_jim_posix_srcs}
     ${_jim_generated_tcl_ext_srcs}
     "${_jim_load_static_exts_c}"
 )
