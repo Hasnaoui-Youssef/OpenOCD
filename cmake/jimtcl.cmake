@@ -138,6 +138,11 @@ if(HAVE_SYSLOG)
     list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-syslog.c")
 endif()
 
+# jim-tty.c requires termios.h; compile it iff present, as upstream does (auto.def:554-555).
+if(HAVE_TERMIOS_H)
+    list(APPEND _jim_posix_srcs "${JIMTCL_DIR}/jim-tty.c")
+endif()
+
 set(_jimtcl_generated_dir "${CMAKE_BINARY_DIR}/jimtcl_generated")
 file(MAKE_DIRECTORY "${_jimtcl_generated_dir}")
 
